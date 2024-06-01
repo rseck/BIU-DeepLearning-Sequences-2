@@ -102,7 +102,6 @@ class WindowTagger:
         for iteration in range(iterations_num):
             print("iteration {}\n".format(iteration))
             for labeled_sentence in train_labeled_sentences:
-                i += 1
                 # if i > 2:
                 #     break
                 sentence = [labeled_word[0] for labeled_word in labeled_sentence]
@@ -111,6 +110,7 @@ class WindowTagger:
                     y = self.get_gold(labeled_sentence, word_index_in_sentence)
                     layer_2_softmax = self.forwards(window_word_indices)
                     loss = self.criterion(layer_2_softmax, y)
+                    i = i + 1
                     if i % 300 == 0:
                         print(f"loss: {loss} after {i} samples")
                     loss_list.append(loss)
@@ -143,6 +143,7 @@ class WindowTagger:
                 true_labels.append([self.labels.index(labeled_sentence[word_index_in_sentence][1])])
                 layer_2_softmax = self.forwards(window_word_indices)
                 predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
+        #todo check accuracy of NER as stated
         accuracy = accuracy_score(true_labels, predictions)
         self.accuracy_list.append(accuracy)
         print(f"Accuracy: {accuracy}")
@@ -191,8 +192,8 @@ def main():
     vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
     dev_labeled_sentences = parse_labeled_data(dev_file)
     test_unlabeled_sentences = parse_unlabeled_data(test_file)
-    window_tagger = WindowTagger(vocabulary, labels, 20, 0.001)
-    window_tagger.train(1, train_labeled_sentences, dev_labeled_sentences)
+    window_tagger = WindowTagger(vocabulary, labels, 40, 0.001)
+    window_tagger.train(10, train_labeled_sentences, dev_labeled_sentences)
     print(window_tagger.accuracy_list)
 
 
