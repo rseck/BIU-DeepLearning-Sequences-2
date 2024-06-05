@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix
+from datetime import datetime
 
 from data_parser import parse_labeled_data, extract_vocabulary_and_labels, parse_unlabeled_data
 
@@ -38,11 +39,11 @@ def glorot_init(first_dim, second_dim):
 
 
 class WindowTagger:
-    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, embedding_dim=50, window_shape=(2, 2),
+    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, embedding_dim=50, window_shape=(2, 2),
                  padding_words=('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')):
         self.padding_words = padding_words
         self.unknown_word = 'UNK'
-        self.vocabulary = vocabulary + list(self.padding_words) + [self.unknown_word]
+        self.vocabulary = list(self.padding_words) + [self.unknown_word] + vocabulary
         self.labels = labels
         self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
@@ -56,6 +57,8 @@ class WindowTagger:
         self.criterion = torch.nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
         self.accuracy_list = []
+        self.task = task
+        self.print_file = print_file
 
     def get_word_index(self, word):
         if word in self.vocabulary:
@@ -100,7 +103,8 @@ class WindowTagger:
         loss_list = []
         i = 0
         for iteration in range(iterations_num):
-            print("iteration {}\n".format(iteration))
+            loss_in_epoch = []
+            print("iteration {}\n".format(iteration), file=self.print_file)
             for labeled_sentence in train_labeled_sentences:
                 # if i > 2:
                 #     break
@@ -111,9 +115,12 @@ class WindowTagger:
                     layer_2_softmax = self.forwards(window_word_indices)
                     loss = self.criterion(layer_2_softmax, y)
                     i = i + 1
-                    if i % 300 == 0:
-                        print(f"loss: {loss} after {i} samples")
+                    # if i > 2:
+                    #     break
+                    if i % 900 == 0:
+                        print(f"avarage loss in epoch: {sum(loss_in_epoch)/len(loss_in_epoch)} after {i} samples", file=self.print_file)
                     loss_list.append(loss)
+                    loss_in_epoch.append(loss)
                     loss.backward()
                     self.back_prop()
             self.print_accuracy_on_dev(dev_labeled_sentences)
@@ -132,25 +139,33 @@ class WindowTagger:
     def print_accuracy_on_dev(self, dev_labeled_sentences):
         predictions = []
         true_labels = []
-        # i = 0
+        i = 0
         for labeled_sentence in dev_labeled_sentences:
-            # i += 1
+            i += 1
             # if i > 6:
             #     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
-                true_labels.append([self.labels.index(labeled_sentence[word_index_in_sentence][1])])
+                true_labels.append(self.labels.index(labeled_sentence[word_index_in_sentence][1]))
                 layer_2_softmax = self.forwards(window_word_indices)
                 predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
-        #todo check accuracy of NER as stated
+        if self.task == 'ner':
+            filtered_predictions = []
+            filtered_true_labels = []
+            for prediction, true_label in zip(predictions, true_labels):
+                if not (prediction == self.labels.index('O') and prediction == true_label):
+                    filtered_predictions.append(prediction)
+                    filtered_true_labels.append(true_label)
+            true_labels = filtered_true_labels
+            predictions = filtered_predictions
         accuracy = accuracy_score(true_labels, predictions)
         self.accuracy_list.append(accuracy)
-        print(f"Accuracy: {accuracy}")
+        print(f"Accuracy: {accuracy}", file=self.print_file)
         # Generate confusion matrix
         conf_matrix = confusion_matrix(true_labels, predictions)
-        print("Confusion Matrix:")
-        print(conf_matrix)
+        print("Confusion Matrix:", file=self.print_file)
+        print(conf_matrix, file=self.print_file)
 
     def back_prop(self):
         W2 = self.W2
@@ -186,15 +201,22 @@ class WindowTagger:
 
 def main():
     set_seed(100)
-    files = [('pos/train', 'pos/dev', 'pos/test'), ('ner/train', 'ner/dev', 'ner/test')]
-    train_file, dev_file, test_file = files[0]
-    train_labeled_sentences = parse_labeled_data(train_file)
-    vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
-    dev_labeled_sentences = parse_labeled_data(dev_file)
-    test_unlabeled_sentences = parse_unlabeled_data(test_file)
-    window_tagger = WindowTagger(vocabulary, labels, 40, 0.001)
-    window_tagger.train(10, train_labeled_sentences, dev_labeled_sentences)
-    print(window_tagger.accuracy_list)
+    files = [('ner/train', 'ner/dev', 'ner/test'), ('pos/train', 'pos/dev', 'pos/test')]
+    now = datetime.now()
+    hidden_dim = 20
+    lr = 0.01
+    epochs = 5
+    output_file = f"tagger1_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
+
+    with open(output_file, "a") as print_file:
+        for train_file, dev_file, test_file in files:
+            train_labeled_sentences = parse_labeled_data(train_file)
+            vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
+            dev_labeled_sentences = parse_labeled_data(dev_file)
+            test_unlabeled_sentences = parse_unlabeled_data(test_file)
+            window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file)
+            window_tagger.train(epochs, train_labeled_sentences, dev_labeled_sentences)
+            print(window_tagger.accuracy_list, file=print_file)
 
 
 if __name__ == "__main__":
