@@ -100,6 +100,7 @@ class WindowTagger:
         loss_list = []
         i = 0
         for iteration in range(iterations_num):
+            loss_in_epoch = []
             print("iteration {}\n".format(iteration))
             for labeled_sentence in train_labeled_sentences:
                 # if i > 2:
@@ -112,8 +113,9 @@ class WindowTagger:
                     loss = self.criterion(layer_2_softmax, y)
                     i = i + 1
                     if i % 300 == 0:
-                        print(f"loss: {loss} after {i} samples")
+                        print(f"avarage loss in epoch: {sum(loss_in_epoch)/len(loss_in_epoch)} after {i} samples")
                     loss_list.append(loss)
+                    loss_in_epoch.append(loss)
                     loss.backward()
                     self.back_prop()
             self.print_accuracy_on_dev(dev_labeled_sentences)
@@ -192,7 +194,7 @@ def main():
     vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
     dev_labeled_sentences = parse_labeled_data(dev_file)
     test_unlabeled_sentences = parse_unlabeled_data(test_file)
-    window_tagger = WindowTagger(vocabulary, labels, 40, 0.001)
+    window_tagger = WindowTagger(vocabulary, labels, 40, 0.01)
     window_tagger.train(10, train_labeled_sentences, dev_labeled_sentences)
     print(window_tagger.accuracy_list)
 
