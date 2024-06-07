@@ -1,5 +1,5 @@
 def parse_labeled_data(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         lines = file.readlines()
 
     sentences = []
@@ -22,7 +22,7 @@ def parse_labeled_data(file_path):
 
 
 def parse_unlabeled_data(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         lines = file.readlines()
 
     sentences = []
@@ -58,7 +58,7 @@ def extract_vocabulary_and_labels(parsed_sentences):
 
 def main():
     # Example usage
-    for labeled_file, unlabeled_file in [('ner/dev', 'ner/test'), ('pos/dev', 'pos/test')]:
+    for labeled_file, unlabeled_file in [("ner/dev", "ner/test"), ("pos/dev", "pos/test")]:
         labeled_sentences = parse_labeled_data(labeled_file)
         unlabeled_sentences = parse_unlabeled_data(unlabeled_file)
         vocabulary, labels = extract_vocabulary_and_labels(labeled_sentences)
