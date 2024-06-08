@@ -115,8 +115,8 @@ class WindowTagger(nn.Module):
             loss_in_epoch = []
             print("iteration {}\n".format(iteration), file=self.print_file)
             for labeled_sentence in train_labeled_sentences:
-                # if i > 2:
-                #     break
+                if i > 2:
+                    break
                 sentence = [labeled_word[0] for labeled_word in labeled_sentence]
                 sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
                 for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
@@ -124,8 +124,8 @@ class WindowTagger(nn.Module):
                     layer_2_softmax = self.forwards(window_word_indices)
                     loss = self.criterion(layer_2_softmax, y)
                     i = i + 1
-                    # if i > 2:
-                    #     break
+                    if i > 2:
+                        break
                     if i % 900 == 0:
                         print(f"avarage loss in epoch: {sum(loss_in_epoch) / len(loss_in_epoch)} after {i} samples",
                               file=self.print_file)
@@ -136,7 +136,7 @@ class WindowTagger(nn.Module):
                     optimizer.zero_grad()
             self.print_accuracy_on_dev(dev_labeled_sentences)
             self.print_prediction_on_test(iteration)
-        losses = [l.detach().numpy() for l in loss_list]
+        losses = [l.cpu().detach().numpy() for l in loss_list]
         plt.plot(range(len(losses)), losses, "g")
         plt.xlabel("forward pass")
         plt.ylabel("cross entropy loss")
@@ -154,8 +154,8 @@ class WindowTagger(nn.Module):
         i = 0
         for labeled_sentence in dev_labeled_sentences:
             i += 1
-            # if i > 6:
-            #     break
+            if i > 6:
+                break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
@@ -184,8 +184,8 @@ class WindowTagger(nn.Module):
         i = 0
         for sentence_array in self.test_data:
             i += 1
-            # if i>2:
-            #     break
+            if i>2:
+                break
             sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence_array)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
                 layer_2_softmax = self.forwards(window_word_indices)
@@ -199,11 +199,8 @@ class WindowTagger(nn.Module):
         embeds = self.embedding(input)  # Shape: (batch_size, 5, embedding_dim)
         # Flatten the embeddings
         embeds = embeds.view(embeds.size(0), -1)  # Shape: (batch_size, 5 * embedding_dim)
-        # Pass through the first linear layer
         out = self.fc1(embeds)
-        # Apply ReLU activation
         out = torch.tanh(out)
-        # Pass through the second linear layer
         out = self.fc2(out)
         out = torch.softmax(out, dim=1)
         return out
