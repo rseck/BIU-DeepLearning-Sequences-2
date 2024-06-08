@@ -191,19 +191,19 @@ class WindowTagger:
 
     def back_prop(self):
         W2 = self.W2
-        self.W2 = (W2 - self.learning_rate * W2.grad).to(device)
+        self.W2 = W2 - self.learning_rate * W2.grad
         self.W2.retain_grad()
         B2 = self.B2
-        self.B2 = (B2 - self.learning_rate * B2.grad).to(device)
+        self.B2 = B2 - self.learning_rate * B2.grad
         self.B2.retain_grad()
         W1 = self.W1
-        self.W1 = (W1 - self.learning_rate * W1.grad).to(device)
+        self.W1 = W1 - self.learning_rate * W1.grad
         self.W1.retain_grad()
         B1 = self.B1
-        self.B1 = (B1 - self.learning_rate * B1.grad).to(device)
+        self.B1 = B1 - self.learning_rate * B1.grad
         self.B1.retain_grad()
         E = self.E
-        self.E = (E - self.learning_rate * E.grad).to(device)
+        self.E = E - self.learning_rate * E.grad
         self.E.retain_grad()
 
     def forwards(self, window_word_indices):
@@ -214,10 +214,10 @@ class WindowTagger:
             word_embedding = word_one_hot_vec @ self.E
             window_embeddings.append(word_embedding)
         concatenated_window_embeddings = torch.cat(window_embeddings, dim=1).to(device)
-        layer_1_output = ((concatenated_window_embeddings @ self.W1) + self.B1).to(device)
-        layer_1_tanh = (torch.tanh(layer_1_output)).to(device)
-        layer_2_output = ((layer_1_tanh @ self.W2) + self.B2).to(device)
-        layer_2_softmax = torch.softmax(layer_2_output, dim=1).to(device)
+        layer_1_output = (concatenated_window_embeddings @ self.W1) + self.B1
+        layer_1_tanh = (torch.tanh(layer_1_output))
+        layer_2_output = ((layer_1_tanh @ self.W2) + self.B2)
+        layer_2_softmax = torch.softmax(layer_2_output, dim=1)
         return layer_2_softmax
 
 
