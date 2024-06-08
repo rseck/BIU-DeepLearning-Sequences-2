@@ -115,8 +115,8 @@ class WindowTagger(nn.Module):
             loss_in_epoch = []
             print("iteration {}\n".format(iteration), file=self.print_file)
             for labeled_sentence in train_labeled_sentences:
-                if i > 2:
-                    break
+                # if i > 2:
+                #     break
                 sentence = [labeled_word[0] for labeled_word in labeled_sentence]
                 sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
                 for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
@@ -124,8 +124,8 @@ class WindowTagger(nn.Module):
                     layer_2_softmax = self.forwards(window_word_indices)
                     loss = self.criterion(layer_2_softmax, y)
                     i = i + 1
-                    if i > 2:
-                        break
+                    # if i > 2:
+                    #     break
                     if i % 900 == 0:
                         print(f"avarage loss in epoch: {sum(loss_in_epoch) / len(loss_in_epoch)} after {i} samples",
                               file=self.print_file)
@@ -154,8 +154,8 @@ class WindowTagger(nn.Module):
         i = 0
         for labeled_sentence in dev_labeled_sentences:
             i += 1
-            if i > 6:
-                break
+            # if i > 6:
+            #     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
@@ -184,8 +184,8 @@ class WindowTagger(nn.Module):
         i = 0
         for sentence_array in self.test_data:
             i += 1
-            if i>2:
-                break
+            # if i>2:
+            #     break
             sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence_array)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
                 layer_2_softmax = self.forwards(window_word_indices)
