@@ -190,20 +190,15 @@ class WindowTagger:
             print(predictions, file=output)
 
     def back_prop(self):
-        W2 = self.W2
-        self.W2 = W2 - self.learning_rate * torch.tensor(W2.grad)
+        self.W2 = self.W2 - self.learning_rate * self.W2.grad
         self.W2.retain_grad()
-        B2 = self.B2
-        self.B2 = B2 - self.learning_rate * torch.tensor(B2.grad)
+        self.B2 = self.B2 - self.learning_rate * self.B2.grad
         self.B2.retain_grad()
-        W1 = self.W1
-        self.W1 = W1 - self.learning_rate * torch.tensor(W1.grad)
+        self.W1 = self.W1 - self.learning_rate * self.W1.grad
         self.W1.retain_grad()
-        B1 = self.B1
-        self.B1 = B1 - self.learning_rate * torch.tensor(B1.grad)
+        self.B1 = self.B1 - self.learning_rate * self.B1.grad
         self.B1.retain_grad()
-        E = self.E
-        self.E = E - self.learning_rate * torch.tensor(E.grad)
+        self.E = self.E - self.learning_rate * self.E.grad
         self.E.retain_grad()
 
     def forwards(self, window_word_indices):
