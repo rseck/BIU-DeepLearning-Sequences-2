@@ -1,5 +1,7 @@
 import os
 import random
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -46,8 +48,8 @@ print(f"Device: {device}")
 
 
 class WindowTagger(nn.Module):
-    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embedding_dim=50,
-                 window_shape=(2, 2),
+    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embeddings,
+                 embedding_dim=50, window_shape=(2, 2),
                  padding_words=('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')):
         super(WindowTagger, self).__init__()
         self.padding_words = padding_words
@@ -58,7 +60,10 @@ class WindowTagger(nn.Module):
         self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
         assert surrounding_window_length == len(padding_words)
-        self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
+        if embeddings is None:
+            self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
+        else:
+            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
         self.fc1 = nn.Linear(embedding_dim * 5, hidden_dim)
         # Second linear layer
         self.fc2 = nn.Linear(hidden_dim, len(labels))
@@ -207,13 +212,25 @@ class WindowTagger(nn.Module):
 
 
 def main():
+    use_pre_trained_embeddings = True
     set_seed(100)
     files = [('ner/train', 'ner/dev', 'ner/test'), ('pos/train', 'pos/dev', 'pos/test')]
     now = datetime.now()
     hidden_dim = 20
     lr = 0.01
     epochs = 5
-    output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
+    embedding_dim = 50
+
+
+    words_file_name = r"vocab.txt"
+    vec_file_name = r"wordVectors.txt"
+
+    vocab_pre_trained = Path(words_file_name).read_text().split()
+    vecs_pre_trained = np.loadtxt(vec_file_name)
+    if use_pre_trained_embeddings:
+        output_file = f"tagger2_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
+    else:
+        output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
 
     with open(output_file, "a") as print_file:
         for train_file, dev_file, test_file in files:
@@ -222,10 +239,38 @@ def main():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file,
-                                         test_unlabeled_sentences).to(device)
+                                         test_unlabeled_sentences, None)
+            if use_pre_trained_embeddings:
+                window_tagger = task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file,
+                                             test_unlabeled_sentences, train_file, vecs_pre_trained, vocab_pre_trained,
+                                             vocabulary, window_tagger)
+            window_tagger.to(device)
             optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
             window_tagger.train_it(epochs, train_labeled_sentences, dev_labeled_sentences, optimizer)
             print(window_tagger.accuracy_list, file=print_file)
+
+
+def task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabeled_sentences, train_file,
+                 vecs_pre_trained, vocab_pre_trained, vocabulary, window_tagger):
+    vocab_to_add_embedding_vectors_lower_cased = []
+    vocab_to_add_new_vectors = []
+    for word in vocabulary:
+        if word not in vocab_pre_trained:
+            if str.lower(word) in vocab_pre_trained:
+                vocab_to_add_embedding_vectors_lower_cased.append(word)
+            else:
+                vocab_to_add_new_vectors.append(word)
+    vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(
+        ('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')) + ['UNK']
+    new_vectors = torch.tensor(glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True)
+    embedding_vectors_for_upper_cased = torch.tensor(np.array(
+        [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
+         vocab_to_add_embedding_vectors_lower_cased]))
+    E = torch.cat([new_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)])
+    full_vocab = vocab_to_add_new_vectors + vocab_to_add_embedding_vectors_lower_cased + vocab_pre_trained
+    window_tagger = WindowTagger(full_vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
+                                 test_unlabeled_sentences, E)
+    return window_tagger
 
 
 if __name__ == "__main__":
