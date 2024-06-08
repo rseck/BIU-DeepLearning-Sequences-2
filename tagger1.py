@@ -209,7 +209,7 @@ class WindowTagger:
     def forwards(self, window_word_indices):
         window_embeddings = []
         for window_word_index in window_word_indices:
-            word_one_hot_vec = torch.zeros(1, len(self.vocabulary), dtype=torch.float64)
+            word_one_hot_vec = (torch.zeros(1, len(self.vocabulary), dtype=torch.float64)).to(device)
             word_one_hot_vec[0][window_word_index] = 1
             word_embedding = word_one_hot_vec @ self.E
             window_embeddings.append(word_embedding)
