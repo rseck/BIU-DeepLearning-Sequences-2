@@ -2,9 +2,12 @@ import os
 import random
 import numpy as np
 import torch
+import torch.nn as nn
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix
 from datetime import datetime
+
+from torch import optim
 
 from data_parser import parse_labeled_data, extract_vocabulary_and_labels, parse_unlabeled_data
 
@@ -37,13 +40,16 @@ def glorot_init(first_dim, second_dim):
     epsilon = np.sqrt(6 / (first_dim + second_dim))
     return np.random.uniform(-epsilon, epsilon, (first_dim, second_dim))
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
-class WindowTagger:
+
+class WindowTagger(nn.Module):
     def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embedding_dim=50,
                  window_shape=(2, 2),
                  padding_words=('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')):
+        super(WindowTagger, self).__init__()
         self.padding_words = padding_words
         self.unknown_word = 'UNK'
         vocabulary_list = list(self.padding_words) + [self.unknown_word] + vocabulary
@@ -52,12 +58,10 @@ class WindowTagger:
         self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
         assert surrounding_window_length == len(padding_words)
-        self.E = torch.tensor(glorot_init(len(self.vocabulary), embedding_dim), requires_grad=True).to(device)
-        self.W1 = torch.tensor(glorot_init((surrounding_window_length + 1) * embedding_dim, hidden_dim),
-                               requires_grad=True).to(device)
-        self.B1 = torch.tensor(glorot_init(1, hidden_dim), requires_grad=True).to(device)
-        self.W2 = torch.tensor(glorot_init(hidden_dim, len(labels)), requires_grad=True).to(device)
-        self.B2 = torch.tensor(glorot_init(1, len(labels)), requires_grad=True).to(device)
+        self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
+        self.fc1 = nn.Linear(embedding_dim * 5, hidden_dim)
+        # Second linear layer
+        self.fc2 = nn.Linear(hidden_dim, len(labels))
         self.criterion = torch.nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
         self.accuracy_list = []
@@ -104,7 +108,7 @@ class WindowTagger:
             word_indices.extend(
                 self.get_indices_of_list_of_words(sentence[word_idx_in_sentence - 2:word_idx_in_sentence]))
 
-    def train(self, iterations_num, train_labeled_sentences, dev_labeled_sentences):
+    def train_it(self, iterations_num, train_labeled_sentences, dev_labeled_sentences, optimizer):
         loss_list = []
         i = 0
         for iteration in range(iterations_num):
@@ -128,7 +132,8 @@ class WindowTagger:
                     loss_list.append(loss)
                     loss_in_epoch.append(loss)
                     loss.backward()
-                    self.back_prop()
+                    optimizer.step()
+                    optimizer.zero_grad()
             self.print_accuracy_on_dev(dev_labeled_sentences)
             self.print_prediction_on_test(iteration)
         losses = [l.detach().numpy() for l in loss_list]
@@ -189,31 +194,19 @@ class WindowTagger:
         with open(print_file, "a") as output:
             print(predictions, file=output)
 
-    def back_prop(self):
-        self.W2 = self.W2 - self.learning_rate * self.W2.grad
-        self.W2.retain_grad()
-        self.B2 = self.B2 - self.learning_rate * self.B2.grad
-        self.B2.retain_grad()
-        self.W1 = self.W1 - self.learning_rate * self.W1.grad
-        self.W1.retain_grad()
-        self.B1 = self.B1 - self.learning_rate * self.B1.grad
-        self.B1.retain_grad()
-        self.E = self.E - self.learning_rate * self.E.grad
-        self.E.retain_grad()
-
     def forwards(self, window_word_indices):
-        window_embeddings = []
-        for window_word_index in window_word_indices:
-            word_one_hot_vec = (torch.zeros(1, len(self.vocabulary), dtype=torch.float64)).to(device)
-            word_one_hot_vec[0][window_word_index] = 1
-            word_embedding = word_one_hot_vec @ self.E
-            window_embeddings.append(word_embedding)
-        concatenated_window_embeddings = torch.cat(window_embeddings, dim=1)
-        layer_1_output = (concatenated_window_embeddings @ self.W1) + self.B1
-        layer_1_tanh = (torch.tanh(layer_1_output))
-        layer_2_output = ((layer_1_tanh @ self.W2) + self.B2)
-        layer_2_softmax = torch.softmax(layer_2_output, dim=1)
-        return layer_2_softmax
+        input = torch.tensor(window_word_indices).reshape(1, 5)
+        embeds = self.embedding(input)  # Shape: (batch_size, 5, embedding_dim)
+        # Flatten the embeddings
+        embeds = embeds.view(embeds.size(0), -1)  # Shape: (batch_size, 5 * embedding_dim)
+        # Pass through the first linear layer
+        out = self.fc1(embeds)
+        # Apply ReLU activation
+        out = torch.tanh(out)
+        # Pass through the second linear layer
+        out = self.fc2(out)
+        out = torch.softmax(out, dim=1)
+        return out
 
 
 def main():
@@ -232,8 +225,9 @@ def main():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file,
-                                         test_unlabeled_sentences)
-            window_tagger.train(epochs, train_labeled_sentences, dev_labeled_sentences)
+                                         test_unlabeled_sentences).to(device)
+            optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
+            window_tagger.train_it(epochs, train_labeled_sentences, dev_labeled_sentences, optimizer)
             print(window_tagger.accuracy_list, file=print_file)
 
 
