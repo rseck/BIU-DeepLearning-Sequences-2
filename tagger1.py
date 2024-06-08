@@ -139,7 +139,7 @@ class WindowTagger:
         plt.show()
 
     def get_gold(self, labeled_sentence, word_index_in_sentence):
-        y = torch.zeros(1, len(self.labels), dtype=torch.float64).to(device)
+        y = torch.zeros(1, len(self.labels), dtype=torch.float64)
         y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
         return y
 
@@ -209,11 +209,11 @@ class WindowTagger:
     def forwards(self, window_word_indices):
         window_embeddings = []
         for window_word_index in window_word_indices:
-            word_one_hot_vec = torch.zeros(1, len(self.vocabulary), dtype=torch.float64).to(device)
+            word_one_hot_vec = torch.zeros(1, len(self.vocabulary), dtype=torch.float64)
             word_one_hot_vec[0][window_word_index] = 1
             word_embedding = word_one_hot_vec @ self.E
             window_embeddings.append(word_embedding)
-        concatenated_window_embeddings = torch.cat(window_embeddings, dim=1).to(device)
+        concatenated_window_embeddings = torch.cat(window_embeddings, dim=1)
         layer_1_output = (concatenated_window_embeddings @ self.W1) + self.B1
         layer_1_tanh = (torch.tanh(layer_1_output))
         layer_2_output = ((layer_1_tanh @ self.W2) + self.B2)
