@@ -195,7 +195,7 @@ class WindowTagger(nn.Module):
             print(predictions, file=output)
 
     def forwards(self, window_word_indices):
-        input = torch.tensor(window_word_indices).reshape(1, 5)
+        input = torch.tensor(window_word_indices).reshape(1, 5).to(device)
         embeds = self.embedding(input)  # Shape: (batch_size, 5, embedding_dim)
         # Flatten the embeddings
         embeds = embeds.view(embeds.size(0), -1)  # Shape: (batch_size, 5 * embedding_dim)
