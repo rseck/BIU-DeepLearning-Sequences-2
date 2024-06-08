@@ -13,31 +13,6 @@ from torch import optim
 
 from data_parser import parse_labeled_data, extract_vocabulary_and_labels, parse_unlabeled_data
 
-
-def set_seed(seed):
-    print("before fixing seed")
-    print(np.random.rand(3))
-    print(np.random.rand(3))
-    print(torch.randn(3))
-    print(torch.randn(3))
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    np.random.RandomState(seed)
-    np.random.default_rng(seed)
-    torch.manual_seed(seed)
-    print("after fixing seed")
-    print(np.random.rand(1))
-    print(np.random.rand(1))
-    print(torch.randn(1))
-    print(torch.randn(1))
-    rng = np.random.default_rng(seed)
-    random_numbers = rng.random(5)
-    print(random_numbers)
-    random_numbers = rng.random(5)
-    print(random_numbers)
-
-
 def glorot_init(first_dim, second_dim):
     epsilon = np.sqrt(6 / (first_dim + second_dim))
     return np.random.uniform(-epsilon, epsilon, (first_dim, second_dim))
@@ -65,7 +40,6 @@ class WindowTagger(nn.Module):
         else:
             self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
         self.fc1 = nn.Linear(embedding_dim * 5, hidden_dim)
-        # Second linear layer
         self.fc2 = nn.Linear(hidden_dim, len(labels))
         self.criterion = torch.nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
@@ -168,21 +142,24 @@ class WindowTagger(nn.Module):
                 layer_2_softmax = self.forwards(window_word_indices)
                 predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
         if self.task == 'ner':
-            filtered_predictions = []
-            filtered_true_labels = []
-            for prediction, true_label in zip(predictions, true_labels):
-                if not (prediction == self.labels.index('O') and prediction == true_label):
-                    filtered_predictions.append(prediction)
-                    filtered_true_labels.append(true_label)
-            true_labels = filtered_true_labels
-            predictions = filtered_predictions
+            predictions, true_labels = self.get_ner_filtered_preds_and_labels(predictions, true_labels)
         accuracy = accuracy_score(true_labels, predictions)
         self.accuracy_list.append(accuracy)
         print(f"Accuracy: {accuracy}", file=self.print_file)
-        # Generate confusion matrix
         conf_matrix = confusion_matrix(true_labels, predictions)
         print("Confusion Matrix:", file=self.print_file)
         print(conf_matrix, file=self.print_file)
+
+    def get_ner_filtered_preds_and_labels(self, predictions, true_labels):
+        filtered_predictions = []
+        filtered_true_labels = []
+        for prediction, true_label in zip(predictions, true_labels):
+            if not (prediction == self.labels.index('O') and prediction == true_label):
+                filtered_predictions.append(prediction)
+                filtered_true_labels.append(true_label)
+        true_labels = filtered_true_labels
+        predictions = filtered_predictions
+        return predictions, true_labels
 
     def print_prediction_on_test(self, iteration):
         predictions = []
@@ -213,18 +190,14 @@ class WindowTagger(nn.Module):
 
 def main():
     use_pre_trained_embeddings = True
-    set_seed(100)
     files = [('ner/train', 'ner/dev', 'ner/test'), ('pos/train', 'pos/dev', 'pos/test')]
     now = datetime.now()
     hidden_dim = 20
     lr = 0.01
     epochs = 5
     embedding_dim = 50
-
-
     words_file_name = r"vocab.txt"
     vec_file_name = r"wordVectors.txt"
-
     vocab_pre_trained = Path(words_file_name).read_text().split()
     vecs_pre_trained = np.loadtxt(vec_file_name)
     if use_pre_trained_embeddings:
@@ -238,20 +211,21 @@ def main():
             vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file,
-                                         test_unlabeled_sentences, None)
             if use_pre_trained_embeddings:
-                window_tagger = task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file,
-                                             test_unlabeled_sentences, train_file, vecs_pre_trained, vocab_pre_trained,
-                                             vocabulary, window_tagger)
+                window_tagger = get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, labels, lr, print_file,
+                                                                              test_unlabeled_sentences, train_file, vecs_pre_trained, vocab_pre_trained,
+                                                                              vocabulary)
+            else:
+                window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file,
+                                             test_unlabeled_sentences, None)
             window_tagger.to(device)
             optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
             window_tagger.train_it(epochs, train_labeled_sentences, dev_labeled_sentences, optimizer)
             print(window_tagger.accuracy_list, file=print_file)
 
 
-def task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabeled_sentences, train_file,
-                 vecs_pre_trained, vocab_pre_trained, vocabulary, window_tagger):
+def get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabeled_sentences, train_file,
+                                                  vecs_pre_trained, vocab_pre_trained, vocabulary):
     vocab_to_add_embedding_vectors_lower_cased = []
     vocab_to_add_new_vectors = []
     for word in vocabulary:
@@ -262,11 +236,11 @@ def task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabel
                 vocab_to_add_new_vectors.append(word)
     vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(
         ('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')) + ['UNK']
-    new_vectors = torch.tensor(glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True)
+    new_words_vectors = torch.tensor(glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True)
     embedding_vectors_for_upper_cased = torch.tensor(np.array(
         [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
          vocab_to_add_embedding_vectors_lower_cased]))
-    E = torch.cat([new_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)]).float()
+    E = torch.cat([new_words_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)]).float()
     full_vocab = vocab_to_add_new_vectors + vocab_to_add_embedding_vectors_lower_cased + vocab_pre_trained
     window_tagger = WindowTagger(full_vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
                                  test_unlabeled_sentences, E)
