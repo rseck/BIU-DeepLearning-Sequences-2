@@ -139,7 +139,7 @@ class WindowTagger:
         plt.show()
 
     def get_gold(self, labeled_sentence, word_index_in_sentence):
-        y = torch.zeros(1, len(self.labels), dtype=torch.float64)
+        y = (torch.zeros(1, len(self.labels), dtype=torch.float64)).to(device)
         y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
         return y
 
