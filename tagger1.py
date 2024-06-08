@@ -266,7 +266,7 @@ def task_2_logic(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabel
     embedding_vectors_for_upper_cased = torch.tensor(np.array(
         [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
          vocab_to_add_embedding_vectors_lower_cased]))
-    E = torch.cat([new_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)])
+    E = torch.cat([new_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)]).float()
     full_vocab = vocab_to_add_new_vectors + vocab_to_add_embedding_vectors_lower_cased + vocab_pre_trained
     window_tagger = WindowTagger(full_vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
                                  test_unlabeled_sentences, E)
