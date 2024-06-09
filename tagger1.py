@@ -1,5 +1,3 @@
-import os
-import random
 from pathlib import Path
 
 import numpy as np
@@ -11,9 +9,13 @@ from datetime import datetime
 
 from torch import optim
 
-from data_parser import parse_labeled_data, extract_vocabulary_and_labels, parse_unlabeled_data
+from data_parser import (
+    parse_labeled_data,
+    extract_vocabulary_and_labels,
+    parse_unlabeled_data,
+)
 
-PADDING_WORDS = ('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')
+PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UNK"
 
 
@@ -27,9 +29,20 @@ print(f"Device: {device}")
 
 
 class WindowTagger(nn.Module):
-    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embeddings,
-                 embedding_dim=50, window_shape=(2, 2),
-                 padding_words=PADDING_WORDS):
+    def __init__(
+        self,
+        vocabulary,
+        labels,
+        hidden_dim,
+        learning_rate,
+        task,
+        print_file,
+        test_data,
+        embeddings,
+        embedding_dim=50,
+        window_shape=(2, 2),
+        padding_words=PADDING_WORDS,
+    ):
         super(WindowTagger, self).__init__()
         self.padding_words = padding_words
         self.unknown_word = UNK
@@ -64,33 +77,57 @@ class WindowTagger(nn.Module):
         res = []
         for word_idx_in_sentence in range(len(sentence)):
             word_indices = []
-            self.generate_start_of_sentence_indices(sentence, word_idx_in_sentence, word_indices)
+            self.generate_start_of_sentence_indices(
+                sentence, word_idx_in_sentence, word_indices
+            )
             word_indices.append(self.get_word_index(sentence[word_idx_in_sentence]))
-            self.generate_end_of_sentence_indices(sentence, word_idx_in_sentence, word_indices)
+            self.generate_end_of_sentence_indices(
+                sentence, word_idx_in_sentence, word_indices
+            )
             res.append(word_indices)
         return res
 
-    def generate_end_of_sentence_indices(self, sentence, word_idx_in_sentence, word_indices):
+    def generate_end_of_sentence_indices(
+        self, sentence, word_idx_in_sentence, word_indices
+    ):
         if word_idx_in_sentence == len(sentence) - 1:
-            word_indices.extend(self.get_indices_of_list_of_words(self.padding_words[2:4]))
+            word_indices.extend(
+                self.get_indices_of_list_of_words(self.padding_words[2:4])
+            )
         elif word_idx_in_sentence == len(sentence) - 2:
             word_indices.append(self.get_word_index(sentence[word_idx_in_sentence + 1]))
-            word_indices.extend(self.get_indices_of_list_of_words(self.padding_words[2:3]))
+            word_indices.extend(
+                self.get_indices_of_list_of_words(self.padding_words[2:3])
+            )
         else:
             word_indices.extend(
-                self.get_indices_of_list_of_words(sentence[word_idx_in_sentence + 1:word_idx_in_sentence + 3]))
+                self.get_indices_of_list_of_words(
+                    sentence[word_idx_in_sentence + 1 : word_idx_in_sentence + 3]
+                )
+            )
 
-    def generate_start_of_sentence_indices(self, sentence, word_idx_in_sentence, word_indices):
+    def generate_start_of_sentence_indices(
+        self, sentence, word_idx_in_sentence, word_indices
+    ):
         if word_idx_in_sentence == 0:
-            word_indices.extend(self.get_indices_of_list_of_words(self.padding_words[0:2]))
+            word_indices.extend(
+                self.get_indices_of_list_of_words(self.padding_words[0:2])
+            )
         elif word_idx_in_sentence == 1:
-            word_indices.extend(self.get_indices_of_list_of_words(self.padding_words[1:2]))
+            word_indices.extend(
+                self.get_indices_of_list_of_words(self.padding_words[1:2])
+            )
             word_indices.append(self.get_word_index(sentence[0]))
         else:
             word_indices.extend(
-                self.get_indices_of_list_of_words(sentence[word_idx_in_sentence - 2:word_idx_in_sentence]))
+                self.get_indices_of_list_of_words(
+                    sentence[word_idx_in_sentence - 2 : word_idx_in_sentence]
+                )
+            )
 
-    def train_it(self, iterations_num, train_labeled_sentences, dev_labeled_sentences, optimizer):
+    def train_it(
+        self, iterations_num, train_labeled_sentences, dev_labeled_sentences, optimizer
+    ):
         loss_list = []
         i = 0
         for iteration in range(iterations_num):
@@ -100,8 +137,12 @@ class WindowTagger(nn.Module):
                 # if i > 2:
                 #     break
                 sentence = [labeled_word[0] for labeled_word in labeled_sentence]
-                sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
-                for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
+                sentence_windows_word_indices = (
+                    self.get_windows_word_indices_for_sentence(sentence)
+                )
+                for word_index_in_sentence, window_word_indices in enumerate(
+                    sentence_windows_word_indices
+                ):
                     y = self.get_gold(labeled_sentence, word_index_in_sentence)
                     layer_2_softmax = self.forwards(window_word_indices)
                     loss = self.criterion(layer_2_softmax, y)
@@ -109,8 +150,10 @@ class WindowTagger(nn.Module):
                     # if i > 2:
                     #     break
                     if i % 900 == 0:
-                        print(f"avarage loss in epoch: {sum(loss_in_epoch) / len(loss_in_epoch)} after {i} samples",
-                              file=self.print_file)
+                        print(
+                            f"avarage loss in epoch: {sum(loss_in_epoch) / len(loss_in_epoch)} after {i} samples",
+                            file=self.print_file,
+                        )
                     loss_list.append(loss)
                     loss_in_epoch.append(loss)
                     loss.backward()
@@ -139,13 +182,21 @@ class WindowTagger(nn.Module):
             # if i > 6:
             #     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
-            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence)
-            for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
-                true_labels.append(self.labels.index(labeled_sentence[word_index_in_sentence][1]))
+            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(
+                sentence
+            )
+            for word_index_in_sentence, window_word_indices in enumerate(
+                sentence_windows_word_indices
+            ):
+                true_labels.append(
+                    self.labels.index(labeled_sentence[word_index_in_sentence][1])
+                )
                 layer_2_softmax = self.forwards(window_word_indices)
                 predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
-        if self.task == 'ner':
-            predictions, true_labels = self.get_ner_filtered_preds_and_labels(predictions, true_labels)
+        if self.task == "ner":
+            predictions, true_labels = self.get_ner_filtered_preds_and_labels(
+                predictions, true_labels
+            )
         accuracy = accuracy_score(true_labels, predictions)
         self.accuracy_list.append(accuracy)
         print(f"Accuracy: {accuracy}", file=self.print_file)
@@ -157,7 +208,7 @@ class WindowTagger(nn.Module):
         filtered_predictions = []
         filtered_true_labels = []
         for prediction, true_label in zip(predictions, true_labels):
-            if not (prediction == self.labels.index('O') and prediction == true_label):
+            if not (prediction == self.labels.index("O") and prediction == true_label):
                 filtered_predictions.append(prediction)
                 filtered_true_labels.append(true_label)
         true_labels = filtered_true_labels
@@ -171,8 +222,12 @@ class WindowTagger(nn.Module):
             i += 1
             # if i>2:
             #     break
-            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(sentence_array)
-            for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
+            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(
+                sentence_array
+            )
+            for word_index_in_sentence, window_word_indices in enumerate(
+                sentence_windows_word_indices
+            ):
                 layer_2_softmax = self.forwards(window_word_indices)
                 predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
         print_file = str(iteration) + "test1_" + self.task + "_" + self.print_file.name
@@ -183,7 +238,9 @@ class WindowTagger(nn.Module):
         input = torch.tensor(window_word_indices).reshape(1, 5).to(device)
         embeds = self.embedding(input)  # Shape: (batch_size, 5, embedding_dim)
         # Flatten the embeddings
-        embeds = embeds.view(embeds.size(0), -1)  # Shape: (batch_size, 5 * embedding_dim)
+        embeds = embeds.view(
+            embeds.size(0), -1
+        )  # Shape: (batch_size, 5 * embedding_dim)
         out = self.fc1(embeds)
         out = torch.tanh(out)
         out = self.fc2(out)
@@ -193,7 +250,7 @@ class WindowTagger(nn.Module):
 
 def main():
     use_pre_trained_embeddings = True
-    files = [('ner/train', 'ner/dev', 'ner/test'), ('pos/train', 'pos/dev', 'pos/test')]
+    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
     now = datetime.now()
     hidden_dim = 20
     lr = 0.01
@@ -215,21 +272,50 @@ def main():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             if use_pre_trained_embeddings:
-                window_tagger = get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, labels, lr, print_file,
-                                                                              test_unlabeled_sentences, train_file, vecs_pre_trained, vocab_pre_trained,
-                                                                              vocabulary)
+                window_tagger = get_window_tagger_with_pre_trained_embeddings(
+                    embedding_dim,
+                    hidden_dim,
+                    labels,
+                    lr,
+                    print_file,
+                    test_unlabeled_sentences,
+                    train_file,
+                    vecs_pre_trained,
+                    vocab_pre_trained,
+                    vocabulary,
+                )
             else:
                 vocab = list(PADDING_WORDS) + [UNK] + vocabulary
-                window_tagger = WindowTagger(vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
-                                             test_unlabeled_sentences, None)
+                window_tagger = WindowTagger(
+                    vocab,
+                    labels,
+                    hidden_dim,
+                    lr,
+                    train_file[0:3],
+                    print_file,
+                    test_unlabeled_sentences,
+                    None,
+                )
             window_tagger.to(device)
             optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
-            window_tagger.train_it(epochs, train_labeled_sentences, dev_labeled_sentences, optimizer)
+            window_tagger.train_it(
+                epochs, train_labeled_sentences, dev_labeled_sentences, optimizer
+            )
             print(window_tagger.accuracy_list, file=print_file)
 
 
-def get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, labels, lr, print_file, test_unlabeled_sentences, train_file,
-                                                  vecs_pre_trained, vocab_pre_trained, vocabulary):
+def get_window_tagger_with_pre_trained_embeddings(
+    embedding_dim,
+    hidden_dim,
+    labels,
+    lr,
+    print_file,
+    test_unlabeled_sentences,
+    train_file,
+    vecs_pre_trained,
+    vocab_pre_trained,
+    vocabulary,
+):
     vocab_to_add_embedding_vectors_lower_cased = []
     vocab_to_add_new_vectors = []
     for word in vocabulary:
@@ -238,16 +324,40 @@ def get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, lab
                 vocab_to_add_embedding_vectors_lower_cased.append(word)
             else:
                 vocab_to_add_new_vectors.append(word)
-    vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(
-        PADDING_WORDS) + [UNK]
-    new_words_vectors = torch.tensor(glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True)
-    embedding_vectors_for_upper_cased = torch.tensor(np.array(
-        [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
-         vocab_to_add_embedding_vectors_lower_cased]))
-    E = torch.cat([new_words_vectors, embedding_vectors_for_upper_cased, torch.tensor(vecs_pre_trained)]).float()
-    full_vocab = vocab_to_add_new_vectors + vocab_to_add_embedding_vectors_lower_cased + vocab_pre_trained
-    window_tagger = WindowTagger(full_vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
-                                 test_unlabeled_sentences, E)
+    vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(PADDING_WORDS) + [UNK]
+    new_words_vectors = torch.tensor(
+        glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True
+    )
+    embedding_vectors_for_upper_cased = torch.tensor(
+        np.array(
+            [
+                vecs_pre_trained[vocab_pre_trained.index(str.lower(word))]
+                for word in vocab_to_add_embedding_vectors_lower_cased
+            ]
+        )
+    )
+    E = torch.cat(
+        [
+            new_words_vectors,
+            embedding_vectors_for_upper_cased,
+            torch.tensor(vecs_pre_trained),
+        ]
+    ).float()
+    full_vocab = (
+        vocab_to_add_new_vectors
+        + vocab_to_add_embedding_vectors_lower_cased
+        + vocab_pre_trained
+    )
+    window_tagger = WindowTagger(
+        full_vocab,
+        labels,
+        hidden_dim,
+        lr,
+        train_file[0:3],
+        print_file,
+        test_unlabeled_sentences,
+        E,
+    )
     return window_tagger
 
 
