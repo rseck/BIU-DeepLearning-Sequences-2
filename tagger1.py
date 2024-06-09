@@ -13,6 +13,10 @@ from torch import optim
 
 from data_parser import parse_labeled_data, extract_vocabulary_and_labels, parse_unlabeled_data
 
+PADDING_WORDS = ('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')
+UNK = "UNK"
+
+
 def glorot_init(first_dim, second_dim):
     epsilon = np.sqrt(6 / (first_dim + second_dim))
     return np.random.uniform(-epsilon, epsilon, (first_dim, second_dim))
@@ -25,16 +29,15 @@ print(f"Device: {device}")
 class WindowTagger(nn.Module):
     def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embeddings,
                  embedding_dim=50, window_shape=(2, 2),
-                 padding_words=('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')):
+                 padding_words=PADDING_WORDS):
         super(WindowTagger, self).__init__()
         self.padding_words = padding_words
-        self.unknown_word = 'UNK'
-        vocabulary_list = list(self.padding_words) + [self.unknown_word] + vocabulary
-        self.vocabulary = {word: index for index, word in enumerate(vocabulary_list)}
+        self.unknown_word = UNK
+        self.vocabulary = {word: index for index, word in enumerate(vocabulary)}
         self.labels = labels
         self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
-        assert surrounding_window_length == len(padding_words)
+        assert surrounding_window_length == len(self.padding_words)
         if embeddings is None:
             self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
         else:
@@ -216,7 +219,8 @@ def main():
                                                                               test_unlabeled_sentences, train_file, vecs_pre_trained, vocab_pre_trained,
                                                                               vocabulary)
             else:
-                window_tagger = WindowTagger(vocabulary, labels, hidden_dim, lr, train_file[0:3], print_file,
+                vocab = list(PADDING_WORDS) + [UNK] + vocabulary
+                window_tagger = WindowTagger(vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
                                              test_unlabeled_sentences, None)
             window_tagger.to(device)
             optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
@@ -235,7 +239,7 @@ def get_window_tagger_with_pre_trained_embeddings(embedding_dim, hidden_dim, lab
             else:
                 vocab_to_add_new_vectors.append(word)
     vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(
-        ('word_minus_2', 'word_minus_1', 'word_plus_1', 'word_plus_2')) + ['UNK']
+        PADDING_WORDS) + [UNK]
     new_words_vectors = torch.tensor(glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True)
     embedding_vectors_for_upper_cased = torch.tensor(np.array(
         [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
