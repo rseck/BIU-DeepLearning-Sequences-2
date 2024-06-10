@@ -1,5 +1,5 @@
 def parse_labeled_data(file_path):
-    with open(file_path, "r") as file:
+    with open(file_path) as file:
         lines = file.readlines()
 
     sentences = []
@@ -22,7 +22,7 @@ def parse_labeled_data(file_path):
 
 
 def parse_unlabeled_data(file_path):
-    with open(file_path, "r") as file:
+    with open(file_path) as file:
         lines = file.readlines()
 
     sentences = []
