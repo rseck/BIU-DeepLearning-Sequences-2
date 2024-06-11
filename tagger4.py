@@ -1,43 +1,81 @@
+from pathlib import Path
+
 import torch
+import tqdm
 from torch.nn import Module, Conv1d, MaxPool1d, Linear
-from data_parser import parse_labeled_data, parse_unlabeled_data, extract_vocabulary_and_labels
+from torch.utils.data import DataLoader
+
+from utils import (
+    create_vocab_chars_and_labels_from_files,
+    parsed_sentences_from_files,
+    SentenceCharacterEmbeddingDataset,
+    create_word_embedding_from_files,
+)
 
 
 class ConvBaseSubWordModel(Module):
-    def __init__(self, num_of_characters: int, embeddings):
+    def __init__(self, num_of_characters: int, word_size: int, num_of_labels: int, embeddings):
         super(ConvBaseSubWordModel, self).__init__()
-        self.pool = MaxPool1d(3)
-        self.conv = Conv1d(10, 30, 3)
-        self.lin = Linear(30, num_of_characters)
+        self.pool = MaxPool1d(word_size)
+        self.conv = Conv1d(num_of_characters, 30, 3)
+        self.lin = Linear(30 + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
-    def forward(self, word):
-        x = self.conv(word)
-        x = self.pool(x)
-        x = torch.stack([x, self.embeddings(word)])
+    def forward(self, embedded_words, words):
+        x = self.conv(embedded_words)
+        x = torch.max(x, dim=2).values
+        existing_embedding = torch.stack([self.embeddings[word[0]] for word in words]).to(
+            device=x.device, dtype=torch.float
+        )
+        x = torch.cat((x, existing_embedding), dim=-1)
         x = self.lin(x)
+        x = torch.softmax(x, dim=1)
         return x
 
 
-def train():
-    model = ConvBaseSubWordModel(10, torch.rand(10))
+def train(model: Module, training_data: DataLoader, epochs: int):
     model.train()
     optimizer = torch.optim.Adam(model.parameters())
-    for i in range(100):
-        word = torch.rand(10)
-        target = torch.rand(10)
-        optimizer.zero_grad()
-        output = model(word)
-        loss = torch.nn.functional.cross_entropy(output, target)
-        loss.backward()
-        optimizer.step()
-        print(loss)
+    for i in tqdm.trange(epochs):
+        for sentences, words, label in tqdm.tqdm(training_data, leave=False):
+            optimizer.zero_grad()
+            output = model(sentences[0], words)
+            loss = torch.nn.functional.cross_entropy(output, label[0])
+            loss.backward()
+            optimizer.step()
 
 
 def main():
-    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
-    for train_file, dev_file, test_file in files:
-        train_labeled_sentences = parse_labeled_data(train_file)
-        vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
-        dev_labeled_sentences = parse_labeled_data(dev_file)
-        test_unlabeled_sentences = parse_unlabeled_data(test_file)
+    ner_path = Path("ner")
+    pos_path = Path("pos")
+    files = [
+        (ner_path / "train", ner_path / "dev", ner_path / "test"),
+        (pos_path / "train", pos_path / "dev", pos_path / "test"),
+    ]
+    batch_size = 1
+    device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda")
+    training_files = [file[0] for file in files]
+    vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files)
+    sentences = parsed_sentences_from_files(training_files)
+    labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
+    max_word_len = max([len(word) for word, _ in labeled_words])
+    loader = DataLoader(
+        SentenceCharacterEmbeddingDataset(sentences, characters, labels, max_word_len, device),
+        batch_size=batch_size,
+        shuffle=True,
+    )
+
+    # embedding = create_word_indexer(vocabulary)
+    vec_file_name = r"wordVectors.txt"
+    words_file_name = r"vocab.txt"
+    word_embeddings = create_word_embedding_from_files(vec_file_name, words_file_name)
+
+    model = ConvBaseSubWordModel(
+        len(characters), max_word_len, len(labels), word_embeddings
+    ).to(device=device)
+
+    train(model, loader, 100)
+
+
+if __name__ == "__main__":
+    main()
