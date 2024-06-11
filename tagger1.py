@@ -251,7 +251,7 @@ class WindowTagger(nn.Module):
 def main():
     use_pre_trained_embeddings = True
     files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
-    now = datetime.now()
+    now = int(datetime.now().timestamp())
     hidden_dim = 20
     lr = 0.01
     epochs = 5
