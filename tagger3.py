@@ -39,8 +39,8 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
             print_file,
             test_data,
             words_embeddings,
-            suffixes,
             prefixes,
+            suffixes,
             embedding_dim=50,
             window_shape=(2, 2),
             padding_words=PADDING_WORDS,
@@ -51,7 +51,8 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
         self.unknown_word = UNK
         self.vocabulary_list = vocabulary
         self.vocabulary_dict = {word: index for index, word in enumerate(vocabulary)}
-        self.outside_vocab_words_indices = [self.vocabulary_dict[word] for word in self.padding_words] + [self.vocabulary_dict[self.unknown_word]]
+        self.outside_vocab_words_indices = [self.vocabulary_dict[word] for word in self.padding_words] + [
+            self.vocabulary_dict[self.unknown_word]]
         self.labels = labels
         surrounding_window_length = window_shape[0] + window_shape[1]
         self.input_size = surrounding_window_length + 1
@@ -60,8 +61,10 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
             self.words_embedding = nn.Embedding(len(self.vocabulary_dict), embedding_dim)
         else:
             self.words_embedding = nn.Embedding.from_pretrained(words_embeddings, freeze=False)
-        self.prefixes = {prefix: index for index, prefix in enumerate(prefixes + list(self.padding_words) + [self.unknown_word])}
-        self.suffixes = {suffix: index for index, suffix in enumerate(suffixes + list(self.padding_words) + [self.unknown_word])}
+        self.prefixes = {prefix: index for index, prefix in
+                         enumerate(prefixes + list(self.padding_words) + [self.unknown_word])}
+        self.suffixes = {suffix: index for index, suffix in
+                         enumerate(suffixes + list(self.padding_words) + [self.unknown_word])}
         self.prefix_embedding = nn.Embedding(len(self.prefixes), embedding_dim)
         self.suffix_embedding = nn.Embedding(len(self.suffixes), embedding_dim)
         self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
@@ -182,9 +185,12 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
                                                          dtype=torch.int32)
-            sentence_prefixes_indices, sentence_suffix_indices = self.get_prefix_and_suffix_indices_for_sentence(sentence_windows_word_indices)
-            prefixes_indices = torch.cat((prefixes_indices, torch.tensor(sentence_prefixes_indices, dtype=torch.int32)), dim=0)
-            suffixes_indices = torch.cat((suffixes_indices, torch.tensor(sentence_suffix_indices, dtype=torch.int32)), dim=0)
+            sentence_prefixes_indices, sentence_suffix_indices = self.get_prefix_and_suffix_indices_for_sentence(
+                sentence_windows_word_indices)
+            prefixes_indices = torch.cat((prefixes_indices, torch.tensor(sentence_prefixes_indices, dtype=torch.int32)),
+                                         dim=0)
+            suffixes_indices = torch.cat((suffixes_indices, torch.tensor(sentence_suffix_indices, dtype=torch.int32)),
+                                         dim=0)
             window_indices = torch.cat((window_indices, sentence_windows_word_indices), dim=0)
             for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
                 y = torch.cat((y, self.get_gold(labeled_sentence, word_index_in_sentence)), dim=0)
@@ -306,7 +312,8 @@ def without_pre_trained_vecs():
                 print_file,
                 test_unlabeled_sentences,
                 None,
-                prefixes, suffixes)
+                prefixes,
+                suffixes)
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger)
 
@@ -346,52 +353,16 @@ def with_pre_trained_vecs():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             window_tagger = get_window_tagger_with_pre_trained_embeddings(
-                    embedding_dim,
-                    hidden_dim,
-                    labels,
-                    lr,
-                    print_file,
-                    test_unlabeled_sentences,
-                    train_file,
-                    vecs_pre_trained,
-                    vocab_pre_trained,
-                    vocabulary,suffixes,
-                prefixes
-            )
-            run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
-                               train_labeled_sentences, window_tagger)
-
-
-def task_3():
-    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
-    now = datetime.now()
-    hidden_dim = 20
-    lr = 0.001
-    epochs = 100
-    embedding_dim = 50
-    words_file_name = r"vocab.txt"
-    vec_file_name = r"wordVectors.txt"
-    # vocab_pre_trained = Path(words_file_name).read_text().split()
-    # vecs_pre_trained = np.loadtxt(vec_file_name)
-    output_file = f"tagger3_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
-    with open(output_file, "a") as print_file:
-        for train_file, dev_file, test_file in files:
-            train_labeled_sentences = parse_labeled_data(train_file)
-            vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
-            prefixes, suffixes = get_unique_prefixes_and_suffixes(vocabulary)
-            dev_labeled_sentences = parse_labeled_data(dev_file)
-            test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            vocab = list(PADDING_WORDS) + [UNK] + vocabulary
-            window_tagger = WindowTaggerWithSuffixPrefix(
-                vocab,
-                labels,
+                embedding_dim,
                 hidden_dim,
+                labels,
                 lr,
-                train_file[0:3],
                 print_file,
                 test_unlabeled_sentences,
-                None,
-                suffixes,
+                train_file,
+                vecs_pre_trained,
+                vocab_pre_trained,
+                vocabulary, suffixes,
                 prefixes
             )
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
@@ -410,8 +381,10 @@ def get_unique_prefixes_and_suffixes(vocabulary):
             suffixes.append(word[-3:])
     return list(set(prefixes)), list(set(suffixes))
 
+
 def main():
-    task_3()
+    without_pre_trained_vecs()
+    with_pre_trained_vecs()
 
 
 def show_graph(val_list, metric):
@@ -424,7 +397,8 @@ def show_graph(val_list, metric):
 
 
 def get_labeled_data_loader(train_labeled_sentences, window_tagger, batch_size=1):
-    prefixes_indices, suffixes_indices, window_indices, y = window_tagger.get_data_in_x_y_format(train_labeled_sentences)
+    prefixes_indices, suffixes_indices, window_indices, y = window_tagger.get_data_in_x_y_format(
+        train_labeled_sentences)
     labeled_dataset = TensorDataset(prefixes_indices, suffixes_indices, window_indices, y)
     dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True)
     return dataloader
@@ -434,10 +408,10 @@ def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
     window_indices = torch.empty((0, window_tagger.input_size), dtype=torch.int32)
     prefixes_indices = torch.empty((0, window_tagger.input_size), dtype=torch.int32)
     suffixes_indices = torch.empty((0, window_tagger.input_size), dtype=torch.int32)
-    j=0
+    j = 0
     for sentence in unlabeled_sentences:
         j += 1
-        if j >3:
+        if j > 3:
             break
         sentence_windows_word_indices = torch.tensor(window_tagger.get_windows_word_indices_for_sentence(sentence),
                                                      dtype=torch.int32)
@@ -463,8 +437,8 @@ def get_window_tagger_with_pre_trained_embeddings(
         train_file,
         vecs_pre_trained,
         vocab_pre_trained,
-        vocabulary,suffixes,
-                prefixes
+        vocabulary, suffixes,
+        prefixes
 ):
     vocab_to_add_embedding_vectors_lower_cased = []
     vocab_to_add_new_vectors = []
@@ -498,8 +472,8 @@ def get_window_tagger_with_pre_trained_embeddings(
         print_file,
         test_unlabeled_sentences,
         E,
-        suffixes,
-        prefixes
+        prefixes,
+        suffixes
     )
     return window_tagger
 
