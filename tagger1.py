@@ -61,6 +61,7 @@ class WindowTagger(nn.Module):
         self.learning_rate = learning_rate
         self.accuracy_list = []
         self.task = task
+        self.print_file = print_file
         self.test_data = test_data
 
     def get_word_index(self, word):
@@ -184,7 +185,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             # if j > 3:
             #     break
             optimizer.zero_grad()
-            output = model(window_indices)
+            output = model(window_indices).to(device)
             label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
@@ -299,41 +300,22 @@ def task2():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             window_tagger = get_window_tagger_with_pre_trained_embeddings(
-                    embedding_dim,
-                    hidden_dim,
-                    labels,
-                    lr,
-                    print_file,
-                    test_unlabeled_sentences,
-                    train_file,
-                    vecs_pre_trained,
-                    vocab_pre_trained,
-                    vocabulary, )
+                embedding_dim,
+                hidden_dim,
+                labels,
+                lr,
+                print_file,
+                test_unlabeled_sentences,
+                train_file,
+                vecs_pre_trained,
+                vocab_pre_trained,
+                vocabulary, )
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger)
 
 
-def task_3():
-    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
-    now = datetime.now()
-    hidden_dim = 20
-    lr = 0.001
-    epochs = 100
-    embedding_dim = 50
-    words_file_name = r"vocab.txt"
-    vec_file_name = r"wordVectors.txt"
-    vocab_pre_trained = Path(words_file_name).read_text().split()
-    vecs_pre_trained = np.loadtxt(vec_file_name)
-    output_file = f"tagger3_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
-
-
-
-
-    pass
-
-
 def main():
-    task_3()
+    pass
 
 
 def show_graph(val_list, metric):
