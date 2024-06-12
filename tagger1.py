@@ -126,7 +126,7 @@ class WindowTagger(nn.Module):
             )
 
     def get_gold(self, labeled_sentence, word_index_in_sentence):
-        y = (torch.zeros(1, len(self.labels), dtype=torch.float64)).to(device)
+        y = (torch.zeros(1, len(self.labels), dtype=torch.float64))
         y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
         return y
 
@@ -186,6 +186,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             #     break
             optimizer.zero_grad()
             output = model(window_indices)
+            label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
