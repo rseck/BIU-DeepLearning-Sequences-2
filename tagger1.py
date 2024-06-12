@@ -1,13 +1,13 @@
 from pathlib import Path
-
 import numpy as np
 import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix
 from datetime import datetime
-
-from torch import optim
+import tqdm
+from torch.nn import Module
+from torch.utils.data import TensorDataset, DataLoader
 
 from data_parser import (
     parse_labeled_data,
@@ -30,18 +30,18 @@ print(f"Device: {device}")
 
 class WindowTagger(nn.Module):
     def __init__(
-        self,
-        vocabulary,
-        labels,
-        hidden_dim,
-        learning_rate,
-        task,
-        print_file,
-        test_data,
-        embeddings,
-        embedding_dim=50,
-        window_shape=(2, 2),
-        padding_words=PADDING_WORDS,
+            self,
+            vocabulary,
+            labels,
+            hidden_dim,
+            learning_rate,
+            task,
+            print_file,
+            test_data,
+            embeddings,
+            embedding_dim=50,
+            window_shape=(2, 2),
+            padding_words=PADDING_WORDS,
     ):
         super(WindowTagger, self).__init__()
         self.padding_words = padding_words
@@ -50,12 +50,13 @@ class WindowTagger(nn.Module):
         self.labels = labels
         self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
+        self.input_size = surrounding_window_length + 1
         assert surrounding_window_length == len(self.padding_words)
         if embeddings is None:
             self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
         else:
             self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
-        self.fc1 = nn.Linear(embedding_dim * 5, hidden_dim)
+        self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, len(labels))
         self.criterion = torch.nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
@@ -88,7 +89,7 @@ class WindowTagger(nn.Module):
         return res
 
     def generate_end_of_sentence_indices(
-        self, sentence, word_idx_in_sentence, word_indices
+            self, sentence, word_idx_in_sentence, word_indices
     ):
         if word_idx_in_sentence == len(sentence) - 1:
             word_indices.extend(
@@ -102,12 +103,12 @@ class WindowTagger(nn.Module):
         else:
             word_indices.extend(
                 self.get_indices_of_list_of_words(
-                    sentence[word_idx_in_sentence + 1 : word_idx_in_sentence + 3]
+                    sentence[word_idx_in_sentence + 1: word_idx_in_sentence + 3]
                 )
             )
 
     def generate_start_of_sentence_indices(
-        self, sentence, word_idx_in_sentence, word_indices
+            self, sentence, word_idx_in_sentence, word_indices
     ):
         if word_idx_in_sentence == 0:
             word_indices.extend(
@@ -121,88 +122,14 @@ class WindowTagger(nn.Module):
         else:
             word_indices.extend(
                 self.get_indices_of_list_of_words(
-                    sentence[word_idx_in_sentence - 2 : word_idx_in_sentence]
+                    sentence[word_idx_in_sentence - 2: word_idx_in_sentence]
                 )
             )
-
-    def train_it(
-        self, iterations_num, train_labeled_sentences, dev_labeled_sentences, optimizer
-    ):
-        loss_list = []
-        i = 0
-        for iteration in range(iterations_num):
-            loss_in_epoch = []
-            print("iteration {}\n".format(iteration), file=self.print_file)
-            for labeled_sentence in train_labeled_sentences:
-                # if i > 2:
-                #     break
-                sentence = [labeled_word[0] for labeled_word in labeled_sentence]
-                sentence_windows_word_indices = (
-                    self.get_windows_word_indices_for_sentence(sentence)
-                )
-                for word_index_in_sentence, window_word_indices in enumerate(
-                    sentence_windows_word_indices
-                ):
-                    y = self.get_gold(labeled_sentence, word_index_in_sentence)
-                    layer_2_softmax = self.forwards(window_word_indices)
-                    loss = self.criterion(layer_2_softmax, y)
-                    i = i + 1
-                    # if i > 2:
-                    #     break
-                    if i % 900 == 0:
-                        print(
-                            f"avarage loss in epoch: {sum(loss_in_epoch) / len(loss_in_epoch)} after {i} samples",
-                            file=self.print_file,
-                        )
-                    loss_list.append(loss)
-                    loss_in_epoch.append(loss)
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-            self.print_accuracy_on_dev(dev_labeled_sentences)
-            self.print_prediction_on_test(iteration)
-        losses = [l.cpu().detach().numpy() for l in loss_list]
-        plt.plot(range(len(losses)), losses, "g")
-        plt.xlabel("forward pass")
-        plt.ylabel("cross entropy loss")
-        plt.grid(True)
-        plt.show()
 
     def get_gold(self, labeled_sentence, word_index_in_sentence):
         y = (torch.zeros(1, len(self.labels), dtype=torch.float64)).to(device)
         y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
         return y
-
-    def print_accuracy_on_dev(self, dev_labeled_sentences):
-        predictions = []
-        true_labels = []
-        i = 0
-        for labeled_sentence in dev_labeled_sentences:
-            i += 1
-            # if i > 6:
-            #     break
-            sentence = [labeled_word[0] for labeled_word in labeled_sentence]
-            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(
-                sentence
-            )
-            for word_index_in_sentence, window_word_indices in enumerate(
-                sentence_windows_word_indices
-            ):
-                true_labels.append(
-                    self.labels.index(labeled_sentence[word_index_in_sentence][1])
-                )
-                layer_2_softmax = self.forwards(window_word_indices)
-                predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
-        if self.task == "ner":
-            predictions, true_labels = self.get_ner_filtered_preds_and_labels(
-                predictions, true_labels
-            )
-        accuracy = accuracy_score(true_labels, predictions)
-        self.accuracy_list.append(accuracy)
-        print(f"Accuracy: {accuracy}", file=self.print_file)
-        conf_matrix = confusion_matrix(true_labels, predictions)
-        print("Confusion Matrix:", file=self.print_file)
-        print(conf_matrix, file=self.print_file)
 
     def get_ner_filtered_preds_and_labels(self, predictions, true_labels):
         filtered_predictions = []
@@ -215,28 +142,9 @@ class WindowTagger(nn.Module):
         predictions = filtered_predictions
         return predictions, true_labels
 
-    def print_prediction_on_test(self, iteration):
-        predictions = []
-        i = 0
-        for sentence_array in self.test_data:
-            i += 1
-            # if i>2:
-            #     break
-            sentence_windows_word_indices = self.get_windows_word_indices_for_sentence(
-                sentence_array
-            )
-            for word_index_in_sentence, window_word_indices in enumerate(
-                sentence_windows_word_indices
-            ):
-                layer_2_softmax = self.forwards(window_word_indices)
-                predictions.append(int(torch.argmax(layer_2_softmax, dim=1)))
-        print_file = str(iteration) + "test1_" + self.task + "_" + self.print_file.name
-        with open(print_file, "a") as output:
-            print(predictions, file=output)
-
-    def forwards(self, window_word_indices):
-        input = torch.tensor(window_word_indices).reshape(1, 5).to(device)
-        embeds = self.embedding(input)  # Shape: (batch_size, 5, embedding_dim)
+    def forward(self, window_word_indices):
+        x = window_word_indices.to(device)
+        embeds = self.embedding(x)  # Shape: (batch_size, 5, embedding_dim)
         # Flatten the embeddings
         embeds = embeds.view(
             embeds.size(0), -1
@@ -247,10 +155,92 @@ class WindowTagger(nn.Module):
         out = torch.softmax(out, dim=1)
         return out
 
+    def get_data_in_x_y_format(self, train_labeled_sentences):
+        x = torch.empty((0, self.input_size), dtype=torch.int32)
+        y = torch.empty((0, len(self.labels)))
+        j = 1
+        for labeled_sentence in train_labeled_sentences:
+            j += 1
+            if j > 3:
+                break
+            sentence = [labeled_word[0] for labeled_word in labeled_sentence]
+            sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
+                                                         dtype=torch.int32)
+            x = torch.cat((x, sentence_windows_word_indices), dim=0)
+            for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
+                y = torch.cat((y, self.get_gold(labeled_sentence, word_index_in_sentence)), dim=0)
+        return x, y
+
+
+def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_data: DataLoader, epochs: int):
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters())
+    loss_list = []
+    accuracy_list = []
+    for i in tqdm.trange(epochs):
+        running_loss = 0.0
+        print("iteration {}\n".format(i), file=model.print_file)
+        j = 0
+        for window_indices, label_vec in tqdm.tqdm(training_data, leave=False):
+            j += 1
+            if j > 3:
+                break
+            optimizer.zero_grad()
+            output = model(window_indices)
+            loss = model.criterion(output, label_vec)
+            running_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+            del window_indices
+            del label_vec
+        torch.cuda.empty_cache()
+        epoch_loss = running_loss / len(training_data)
+        print(f"avarage loss in epoch: {epoch_loss} ", file=model.print_file)
+        loss_list.append(epoch_loss)
+        accuracy = calculate_accuracy_on_dev(dev_data, model)
+        accuracy_list.append(accuracy)
+        print_predictions_on_test(model, test_data, i)
+    return loss_list, accuracy_list
+
+
+def print_predictions_on_test(model, test_data, i):
+    predictions = []
+    j = 1
+    for window_indices in tqdm.tqdm(test_data, leave=False):
+        j += 1
+        if j > 3:
+            break
+        output = model(window_indices[0])
+        predictions.extend((torch.argmax(output, dim=1)).tolist())
+    print_file = str(i) + "_test1_" + model.task + "_" + model.print_file.name
+    with open(print_file, "a") as output:
+        print(predictions, file=output)
+
+
+def calculate_accuracy_on_dev(dev_data, model):
+    predictions = []
+    true_labels = []
+    j = 0
+    for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False):
+        j += 1
+        if j > 3:
+            break
+        output = model(window_indices)
+        true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
+        predictions.extend((torch.argmax(output, dim=1)).tolist())
+    if model.task == "ner":
+        predictions, true_labels = model.get_ner_filtered_preds_and_labels(predictions, true_labels)
+    accuracy = accuracy_score(true_labels, predictions)
+    print(f"Accuracy: {accuracy}", file=model.print_file)
+    conf_matrix = confusion_matrix(true_labels, predictions)
+    print("Confusion Matrix:", file=model.print_file)
+    print(conf_matrix, file=model.print_file)
+    return accuracy
+
 
 def main():
     use_pre_trained_embeddings = True
-    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
+    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
     hidden_dim = 20
     lr = 0.01
@@ -282,8 +272,7 @@ def main():
                     train_file,
                     vecs_pre_trained,
                     vocab_pre_trained,
-                    vocabulary,
-                )
+                    vocabulary, )
             else:
                 vocab = list(PADDING_WORDS) + [UNK] + vocabulary
                 window_tagger = WindowTagger(
@@ -294,27 +283,56 @@ def main():
                     train_file[0:3],
                     print_file,
                     test_unlabeled_sentences,
-                    None,
-                )
+                    None)
+            train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger)
+            dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
+            test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
             window_tagger.to(device)
-            optimizer = optim.Adam(window_tagger.parameters(), lr=0.001)
-            window_tagger.train_it(
-                epochs, train_labeled_sentences, dev_labeled_sentences, optimizer
-            )
-            print(window_tagger.accuracy_list, file=print_file)
+            loss_list, accuracy_list = train(window_tagger, train_dataloader, dev_dataloader, test_dataloader, 100)
+            print(f"loss list: {loss_list}", file=print_file)
+            print(f"accuracy list: {accuracy_list}", file=print_file)
+            show_graph(loss_list, 'Loss')
+            show_graph(accuracy_list, 'Accuracy')
+
+
+def show_graph(val_list, metric):
+    plt.plot(val_list, label=('Training %s' % metric))
+    plt.xlabel('Epoch')
+    plt.ylabel('%s' % metric)
+    plt.title('%s over Epochs' % metric)
+    plt.legend()
+    plt.show()
+
+
+def get_labeled_data_loader(train_labeled_sentences, window_tagger, batch_size=1):
+    x, y = window_tagger.get_data_in_x_y_format(train_labeled_sentences)
+    labeled_dataset = TensorDataset(x, y)
+    dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True)
+    return dataloader
+
+
+def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
+    x = torch.empty((0, window_tagger.input_size), dtype=torch.int32)
+    for sentence in unlabeled_sentences:
+        sentence_windows_word_indices = torch.tensor(window_tagger.get_windows_word_indices_for_sentence(sentence),
+                                                     dtype=torch.int32)
+        x = torch.cat((x, sentence_windows_word_indices), dim=0)
+    dataset = TensorDataset(x)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    return dataloader
 
 
 def get_window_tagger_with_pre_trained_embeddings(
-    embedding_dim,
-    hidden_dim,
-    labels,
-    lr,
-    print_file,
-    test_unlabeled_sentences,
-    train_file,
-    vecs_pre_trained,
-    vocab_pre_trained,
-    vocabulary,
+        embedding_dim,
+        hidden_dim,
+        labels,
+        lr,
+        print_file,
+        test_unlabeled_sentences,
+        train_file,
+        vecs_pre_trained,
+        vocab_pre_trained,
+        vocabulary,
 ):
     vocab_to_add_embedding_vectors_lower_cased = []
     vocab_to_add_new_vectors = []
@@ -344,9 +362,9 @@ def get_window_tagger_with_pre_trained_embeddings(
         ]
     ).float()
     full_vocab = (
-        vocab_to_add_new_vectors
-        + vocab_to_add_embedding_vectors_lower_cased
-        + vocab_pre_trained
+            vocab_to_add_new_vectors
+            + vocab_to_add_embedding_vectors_lower_cased
+            + vocab_pre_trained
     )
     window_tagger = WindowTagger(
         full_vocab,
