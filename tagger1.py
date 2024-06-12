@@ -61,7 +61,6 @@ class WindowTagger(nn.Module):
         self.learning_rate = learning_rate
         self.accuracy_list = []
         self.task = task
-        self.print_file = print_file
         self.test_data = test_data
 
     def get_word_index(self, word):
@@ -314,8 +313,27 @@ def task2():
                                train_labeled_sentences, window_tagger)
 
 
-def main():
+def task_3():
+    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
+    now = datetime.now()
+    hidden_dim = 20
+    lr = 0.001
+    epochs = 100
+    embedding_dim = 50
+    words_file_name = r"vocab.txt"
+    vec_file_name = r"wordVectors.txt"
+    vocab_pre_trained = Path(words_file_name).read_text().split()
+    vecs_pre_trained = np.loadtxt(vec_file_name)
+    output_file = f"tagger3_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
+
+
+
+
     pass
+
+
+def main():
+    task_3()
 
 
 def show_graph(val_list, metric):
