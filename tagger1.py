@@ -180,7 +180,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         running_loss = 0.0
         print("iteration {}\n".format(i), file=model.print_file)
         j = 0
-        for window_indices, label_vec in tqdm.tqdm(training_data, leave=False):
+        for window_indices, label_vec in tqdm.tqdm(training_data, leave=False, disable=True):
             j += 1
             # if j > 3:
             #     break
@@ -206,7 +206,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
 def print_predictions_on_test(model, test_data, i):
     predictions = []
     j = 1
-    for window_indices in tqdm.tqdm(test_data, leave=False):
+    for window_indices in tqdm.tqdm(test_data, leave=False, disable=True):
         j += 1
         # if j > 3:
         #     break
@@ -221,7 +221,7 @@ def calculate_accuracy_on_dev(dev_data, model):
     predictions = []
     true_labels = []
     j = 0
-    for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False):
+    for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False, disable=True):
         j += 1
         # if j > 3:
         #     break
