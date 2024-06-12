@@ -69,7 +69,7 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
         self.suffix_embedding = nn.Embedding(len(self.suffixes), embedding_dim)
         self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, len(labels))
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.CrossEntropyLoss().to(device)
         self.learning_rate = learning_rate
         self.accuracy_list = []
         self.task = task
@@ -180,8 +180,8 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
         j = 1
         for labeled_sentence in train_labeled_sentences:
             j += 1
-            if j > 3:
-                break
+            # if j > 3:
+            #     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
                                                          dtype=torch.int32)
@@ -229,18 +229,20 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         running_loss = 0.0
         print("iteration {}\n".format(i), file=model.print_file)
         j = 0
-        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False):
+        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False, disable=True):
             j += 1
-            if j > 3:
-                break
+            # if j > 3:
+            #     break
             optimizer.zero_grad()
-            output = model(prefixes_indices, suffixes_indices, window_indices).to(device)
-            label_vec.to(device)
+            output = model(prefixes_indices, suffixes_indices, window_indices)
+            label_vec = label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
             del window_indices
+            del prefixes_indices
+            del suffixes_indices
             del label_vec
         torch.cuda.empty_cache()
         epoch_loss = running_loss / len(training_data)
@@ -255,10 +257,10 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
 def print_predictions_on_test(model, test_data, i):
     predictions = []
     j = 1
-    for prefixes_indices, suffixes_indices, window_indices in tqdm.tqdm(test_data, leave=False):
+    for prefixes_indices, suffixes_indices, window_indices in tqdm.tqdm(test_data, leave=False, disable=True):
         j += 1
-        if j > 3:
-            break
+        # if j > 3:
+        #     break
         output = model(prefixes_indices, suffixes_indices, window_indices)
         predictions.extend((torch.argmax(output, dim=1)).tolist())
     print_file = str(i) + "_test1_" + model.task + "_" + model.print_file.name
@@ -270,10 +272,10 @@ def calculate_accuracy_on_dev(dev_data, model):
     predictions = []
     true_labels = []
     j = 0
-    for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(dev_data, leave=False):
+    for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(dev_data, leave=False, disable=True):
         j += 1
-        if j > 3:
-            break
+        # if j > 3:
+        #     break
         output = model(prefixes_indices, suffixes_indices, window_indices)
         true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
         predictions.extend((torch.argmax(output, dim=1)).tolist())
@@ -315,12 +317,12 @@ def without_pre_trained_vecs():
                 prefixes,
                 suffixes)
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
-                               train_labeled_sentences, window_tagger)
+                               train_labeled_sentences, window_tagger, 32)
 
 
 def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences, train_labeled_sentences,
-                       window_tagger):
-    train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger)
+                       window_tagger, batch_size):
+    train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger, batch_size)
     dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
     test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
     window_tagger.to(device)
@@ -366,7 +368,7 @@ def with_pre_trained_vecs():
                 prefixes
             )
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
-                               train_labeled_sentences, window_tagger)
+                               train_labeled_sentences, window_tagger, 32)
 
 
 def get_unique_prefixes_and_suffixes(vocabulary):
@@ -411,8 +413,8 @@ def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
     j = 0
     for sentence in unlabeled_sentences:
         j += 1
-        if j > 3:
-            break
+        # if j > 3:
+        #     break
         sentence_windows_word_indices = torch.tensor(window_tagger.get_windows_word_indices_for_sentence(sentence),
                                                      dtype=torch.int32)
         sentence_prefixes_indices, sentence_suffix_indices = window_tagger.get_prefix_and_suffix_indices_for_sentence(
