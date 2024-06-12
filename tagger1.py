@@ -191,6 +191,8 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
+            del label_vec
+            del output
         torch.cuda.empty_cache()
         epoch_loss = running_loss / len(training_data)
         print(f"avarage loss in epoch: {epoch_loss} ", file=model.print_file)
