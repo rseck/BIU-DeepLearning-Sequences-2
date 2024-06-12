@@ -16,7 +16,7 @@ from data_parser import (
 )
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
-UNK = "UNK"
+UNK = "UUUNKKK"
 
 
 def glorot_init(first_dim, second_dim):
@@ -48,7 +48,6 @@ class WindowTagger(nn.Module):
         self.unknown_word = UNK
         self.vocabulary = {word: index for index, word in enumerate(vocabulary)}
         self.labels = labels
-        self.window_shape = window_shape
         surrounding_window_length = window_shape[0] + window_shape[1]
         self.input_size = surrounding_window_length + 1
         assert surrounding_window_length == len(self.padding_words)
@@ -172,9 +171,9 @@ class WindowTagger(nn.Module):
         return x, y
 
 
-def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_data: DataLoader, epochs: int):
+def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_data: DataLoader, epochs: int, lr=0.001):
     model.train()
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_list = []
     accuracy_list = []
     for i in tqdm.trange(epochs):
@@ -238,22 +237,13 @@ def calculate_accuracy_on_dev(dev_data, model):
     return accuracy
 
 
-def main():
-    use_pre_trained_embeddings = True
+def task_1():
     files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
     hidden_dim = 20
-    lr = 0.01
-    epochs = 5
-    embedding_dim = 50
-    words_file_name = r"vocab.txt"
-    vec_file_name = r"wordVectors.txt"
-    vocab_pre_trained = Path(words_file_name).read_text().split()
-    vecs_pre_trained = np.loadtxt(vec_file_name)
-    if use_pre_trained_embeddings:
-        output_file = f"tagger2_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
-    else:
-        output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
+    lr = 0.001
+    epochs = 100
+    output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
 
     with open(output_file, "a") as print_file:
         for train_file, dev_file, test_file in files:
@@ -261,8 +251,54 @@ def main():
             vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            if use_pre_trained_embeddings:
-                window_tagger = get_window_tagger_with_pre_trained_embeddings(
+            vocab = list(PADDING_WORDS) + [UNK] + vocabulary
+            window_tagger = WindowTagger(
+                vocab,
+                labels,
+                hidden_dim,
+                lr,
+                train_file[0:3],
+                print_file,
+                test_unlabeled_sentences,
+                None)
+            run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
+                               train_labeled_sentences, window_tagger)
+
+
+def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences, train_labeled_sentences,
+                       window_tagger):
+    train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger)
+    dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
+    test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
+    window_tagger.to(device)
+    loss_list, accuracy_list = train(window_tagger, train_dataloader, dev_dataloader, test_dataloader, epochs,
+                                     lr)
+    print(f"loss list: {loss_list}", file=print_file)
+    print(f"accuracy list: {accuracy_list}", file=print_file)
+    show_graph(loss_list, 'Loss')
+    show_graph(accuracy_list, 'Accuracy')
+
+
+def task2():
+    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
+    now = datetime.now()
+    hidden_dim = 20
+    lr = 0.001
+    epochs = 100
+    embedding_dim = 50
+    words_file_name = r"vocab.txt"
+    vec_file_name = r"wordVectors.txt"
+    vocab_pre_trained = Path(words_file_name).read_text().split()
+    vecs_pre_trained = np.loadtxt(vec_file_name)
+    output_file = f"tagger2_output_hid_dim_{hidden_dim}_learning_rate_{lr}_epochs_{epochs}_{now}.txt"
+
+    with open(output_file, "a") as print_file:
+        for train_file, dev_file, test_file in files:
+            train_labeled_sentences = parse_labeled_data(train_file)
+            vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
+            dev_labeled_sentences = parse_labeled_data(dev_file)
+            test_unlabeled_sentences = parse_unlabeled_data(test_file)
+            window_tagger = get_window_tagger_with_pre_trained_embeddings(
                     embedding_dim,
                     hidden_dim,
                     labels,
@@ -273,26 +309,12 @@ def main():
                     vecs_pre_trained,
                     vocab_pre_trained,
                     vocabulary, )
-            else:
-                vocab = list(PADDING_WORDS) + [UNK] + vocabulary
-                window_tagger = WindowTagger(
-                    vocab,
-                    labels,
-                    hidden_dim,
-                    lr,
-                    train_file[0:3],
-                    print_file,
-                    test_unlabeled_sentences,
-                    None)
-            train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger)
-            dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
-            test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
-            window_tagger.to(device)
-            loss_list, accuracy_list = train(window_tagger, train_dataloader, dev_dataloader, test_dataloader, 100)
-            print(f"loss list: {loss_list}", file=print_file)
-            print(f"accuracy list: {accuracy_list}", file=print_file)
-            show_graph(loss_list, 'Loss')
-            show_graph(accuracy_list, 'Accuracy')
+            run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
+                               train_labeled_sentences, window_tagger)
+
+
+def main():
+    pass
 
 
 def show_graph(val_list, metric):
@@ -346,21 +368,12 @@ def get_window_tagger_with_pre_trained_embeddings(
     new_words_vectors = torch.tensor(
         glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True
     )
-    embedding_vectors_for_upper_cased = torch.tensor(
-        np.array(
-            [
-                vecs_pre_trained[vocab_pre_trained.index(str.lower(word))]
-                for word in vocab_to_add_embedding_vectors_lower_cased
-            ]
-        )
-    )
-    E = torch.cat(
-        [
-            new_words_vectors,
-            embedding_vectors_for_upper_cased,
-            torch.tensor(vecs_pre_trained),
-        ]
-    ).float()
+    embedding_vectors_for_upper_cased = torch.tensor([
+        vecs_pre_trained[vocab_pre_trained.index(str.lower(word))]
+        for word in vocab_to_add_embedding_vectors_lower_cased])
+    E = torch.cat([new_words_vectors,
+                   embedding_vectors_for_upper_cased,
+                   torch.tensor(vecs_pre_trained)]).float()
     full_vocab = (
             vocab_to_add_new_vectors
             + vocab_to_add_embedding_vectors_lower_cased
