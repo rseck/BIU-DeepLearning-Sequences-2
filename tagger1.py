@@ -186,7 +186,6 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             #     break
             optimizer.zero_grad()
             output = model(window_indices)
-            label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
