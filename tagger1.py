@@ -57,7 +57,7 @@ class WindowTagger(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
         self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, len(labels))
-        self.criterion = torch.nn.CrossEntropyLoss().to(device)
+        self.criterion = torch.nn.CrossEntropyLoss().cuda()
         self.learning_rate = learning_rate
         self.accuracy_list = []
         self.task = task
