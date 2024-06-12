@@ -268,7 +268,7 @@ def task_1():
 
 def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences, train_labeled_sentences,
                        window_tagger):
-    train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger)
+    train_dataloader = get_labeled_data_loader(train_labeled_sentences, window_tagger, 8)
     dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
     test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
     window_tagger.to(device)
