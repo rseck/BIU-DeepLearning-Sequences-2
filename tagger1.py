@@ -185,14 +185,12 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             # if j > 3:
             #     break
             optimizer.zero_grad()
-            output = model(window_indices).to(device)
+            output = model(window_indices)
             label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
-            del window_indices
-            del label_vec
         torch.cuda.empty_cache()
         epoch_loss = running_loss / len(training_data)
         print(f"avarage loss in epoch: {epoch_loss} ", file=model.print_file)
