@@ -160,8 +160,8 @@ class WindowTagger(nn.Module):
         j = 1
         for labeled_sentence in train_labeled_sentences:
             j += 1
-            if j > 3:
-                break
+            # if j > 3:
+            #     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
                                                          dtype=torch.int32)
@@ -182,8 +182,8 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         j = 0
         for window_indices, label_vec in tqdm.tqdm(training_data, leave=False):
             j += 1
-            if j > 3:
-                break
+            # if j > 3:
+            #     break
             optimizer.zero_grad()
             output = model(window_indices)
             loss = model.criterion(output, label_vec)
@@ -207,8 +207,8 @@ def print_predictions_on_test(model, test_data, i):
     j = 1
     for window_indices in tqdm.tqdm(test_data, leave=False):
         j += 1
-        if j > 3:
-            break
+        # if j > 3:
+        #     break
         output = model(window_indices[0])
         predictions.extend((torch.argmax(output, dim=1)).tolist())
     print_file = str(i) + "_test1_" + model.task + "_" + model.print_file.name
@@ -222,8 +222,8 @@ def calculate_accuracy_on_dev(dev_data, model):
     j = 0
     for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False):
         j += 1
-        if j > 3:
-            break
+        # if j > 3:
+        #     break
         output = model(window_indices)
         true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
         predictions.extend((torch.argmax(output, dim=1)).tolist())
