@@ -14,21 +14,16 @@ from data_parser import (
     extract_vocabulary_and_labels,
     parse_unlabeled_data,
 )
+from tagger1 import show_graph, get_full_vocabulary_and_embeddings, BaseWindowTagger
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
-
-
-def glorot_init(first_dim, second_dim):
-    epsilon = np.sqrt(6 / (first_dim + second_dim))
-    return np.random.uniform(-epsilon, epsilon, (first_dim, second_dim))
-
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
 
-class WindowTaggerWithSuffixPrefix(nn.Module):
+class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
     def __init__(
             self,
             vocabulary,
@@ -42,21 +37,11 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
             prefixes,
             suffixes,
             embedding_dim=50,
-            window_shape=(2, 2),
-            padding_words=PADDING_WORDS,
-
     ):
-        super(WindowTaggerWithSuffixPrefix, self).__init__()
-        self.padding_words = padding_words
-        self.unknown_word = UNK
-        self.vocabulary_list = vocabulary
-        self.vocabulary_dict = {word: index for index, word in enumerate(vocabulary)}
+        super(WindowTaggerWithSuffixPrefix, self).__init__(vocabulary, labels, hidden_dim, learning_rate, task,
+                                                           print_file, test_data, (0, 0))
         self.outside_vocab_words_indices = [self.vocabulary_dict[word] for word in self.padding_words] + [
             self.vocabulary_dict[self.unknown_word]]
-        self.labels = labels
-        surrounding_window_length = window_shape[0] + window_shape[1]
-        self.input_size = surrounding_window_length + 1
-        assert surrounding_window_length == len(self.padding_words)
         if words_embeddings is None:
             self.words_embedding = nn.Embedding(len(self.vocabulary_dict), embedding_dim)
         else:
@@ -67,91 +52,6 @@ class WindowTaggerWithSuffixPrefix(nn.Module):
                          enumerate(suffixes + list(self.padding_words) + [self.unknown_word])}
         self.prefix_embedding = nn.Embedding(len(self.prefixes), embedding_dim)
         self.suffix_embedding = nn.Embedding(len(self.suffixes), embedding_dim)
-        self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, len(labels))
-        self.criterion = torch.nn.CrossEntropyLoss().to(device)
-        self.learning_rate = learning_rate
-        self.accuracy_list = []
-        self.task = task
-        self.test_data = test_data
-        self.print_file = print_file
-
-    def get_word_index(self, word):
-        index = self.vocabulary_dict.get(word)
-        if index is None:
-            index = self.vocabulary_dict.get(self.unknown_word)
-        return index
-
-    def get_indices_of_list_of_words(self, words):
-        return [self.get_word_index(word) for word in words]
-
-    def get_windows_word_indices_for_sentence(self, sentence):
-        res = []
-        for word_idx_in_sentence in range(len(sentence)):
-            word_indices = []
-            self.generate_start_of_sentence_indices(
-                sentence, word_idx_in_sentence, word_indices
-            )
-            word_indices.append(self.get_word_index(sentence[word_idx_in_sentence]))
-            self.generate_end_of_sentence_indices(
-                sentence, word_idx_in_sentence, word_indices
-            )
-            res.append(word_indices)
-        return res
-
-    def generate_end_of_sentence_indices(
-            self, sentence, word_idx_in_sentence, word_indices
-    ):
-        if word_idx_in_sentence == len(sentence) - 1:
-            word_indices.extend(
-                self.get_indices_of_list_of_words(self.padding_words[2:4])
-            )
-        elif word_idx_in_sentence == len(sentence) - 2:
-            word_indices.append(self.get_word_index(sentence[word_idx_in_sentence + 1]))
-            word_indices.extend(
-                self.get_indices_of_list_of_words(self.padding_words[2:3])
-            )
-        else:
-            word_indices.extend(
-                self.get_indices_of_list_of_words(
-                    sentence[word_idx_in_sentence + 1: word_idx_in_sentence + 3]
-                )
-            )
-
-    def generate_start_of_sentence_indices(
-            self, sentence, word_idx_in_sentence, word_indices
-    ):
-        if word_idx_in_sentence == 0:
-            word_indices.extend(
-                self.get_indices_of_list_of_words(self.padding_words[0:2])
-            )
-        elif word_idx_in_sentence == 1:
-            word_indices.extend(
-                self.get_indices_of_list_of_words(self.padding_words[1:2])
-            )
-            word_indices.append(self.get_word_index(sentence[0]))
-        else:
-            word_indices.extend(
-                self.get_indices_of_list_of_words(
-                    sentence[word_idx_in_sentence - 2: word_idx_in_sentence]
-                )
-            )
-
-    def get_gold(self, labeled_sentence, word_index_in_sentence):
-        y = (torch.zeros(1, len(self.labels), dtype=torch.float64))
-        y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
-        return y
-
-    def get_ner_filtered_preds_and_labels(self, predictions, true_labels):
-        filtered_predictions = []
-        filtered_true_labels = []
-        for prediction, true_label in zip(predictions, true_labels):
-            if not (prediction == self.labels.index("O") and prediction == true_label):
-                filtered_predictions.append(prediction)
-                filtered_true_labels.append(true_label)
-        true_labels = filtered_true_labels
-        predictions = filtered_predictions
-        return predictions, true_labels
 
     def forward(self, prefixes_indices, suffixes_indices, window_indices):
         window_indices = window_indices.to(device)
@@ -229,7 +129,8 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         running_loss = 0.0
         print("iteration {}\n".format(i), file=model.print_file)
         j = 0
-        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False, disable=True):
+        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False,
+                                                                                       disable=True):
             j += 1
             # if j > 3:
             #     break
@@ -354,18 +255,19 @@ def with_pre_trained_vecs():
             prefixes, suffixes = get_unique_prefixes_and_suffixes(vocabulary)
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            window_tagger = get_window_tagger_with_pre_trained_embeddings(
-                embedding_dim,
-                hidden_dim,
+            full_vocab, E = get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained, vocab_pre_trained,
+                                                               vocabulary)
+            window_tagger = WindowTaggerWithSuffixPrefix(
+                full_vocab,
                 labels,
+                hidden_dim,
                 lr,
+                train_file[0:3],
                 print_file,
                 test_unlabeled_sentences,
-                train_file,
-                vecs_pre_trained,
-                vocab_pre_trained,
-                vocabulary, suffixes,
-                prefixes
+                E,
+                prefixes,
+                suffixes
             )
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger, 32)
@@ -387,15 +289,6 @@ def get_unique_prefixes_and_suffixes(vocabulary):
 def main():
     without_pre_trained_vecs()
     with_pre_trained_vecs()
-
-
-def show_graph(val_list, metric):
-    plt.plot(val_list, label=('Training %s' % metric))
-    plt.xlabel('Epoch')
-    plt.ylabel('%s' % metric)
-    plt.title('%s over Epochs' % metric)
-    plt.legend()
-    plt.show()
 
 
 def get_labeled_data_loader(train_labeled_sentences, window_tagger, batch_size=1):
@@ -427,57 +320,6 @@ def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
     dataset = TensorDataset(prefixes_indices, suffixes_indices, window_indices)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     return dataloader
-
-
-def get_window_tagger_with_pre_trained_embeddings(
-        embedding_dim,
-        hidden_dim,
-        labels,
-        lr,
-        print_file,
-        test_unlabeled_sentences,
-        train_file,
-        vecs_pre_trained,
-        vocab_pre_trained,
-        vocabulary, suffixes,
-        prefixes
-):
-    vocab_to_add_embedding_vectors_lower_cased = []
-    vocab_to_add_new_vectors = []
-    for word in vocabulary:
-        if word not in vocab_pre_trained:
-            if str.lower(word) in vocab_pre_trained:
-                vocab_to_add_embedding_vectors_lower_cased.append(word)
-            else:
-                vocab_to_add_new_vectors.append(word)
-    vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(PADDING_WORDS) + [UNK]
-    new_words_vectors = torch.tensor(
-        glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True
-    )
-    embedding_vectors_for_upper_cased = torch.tensor([
-        vecs_pre_trained[vocab_pre_trained.index(str.lower(word))]
-        for word in vocab_to_add_embedding_vectors_lower_cased])
-    E = torch.cat([new_words_vectors,
-                   embedding_vectors_for_upper_cased,
-                   torch.tensor(vecs_pre_trained)]).float()
-    full_vocab = (
-            vocab_to_add_new_vectors
-            + vocab_to_add_embedding_vectors_lower_cased
-            + vocab_pre_trained
-    )
-    window_tagger = WindowTaggerWithSuffixPrefix(
-        full_vocab,
-        labels,
-        hidden_dim,
-        lr,
-        train_file[0:3],
-        print_file,
-        test_unlabeled_sentences,
-        E,
-        prefixes,
-        suffixes
-    )
-    return window_tagger
 
 
 if __name__ == "__main__":

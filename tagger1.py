@@ -17,50 +17,29 @@ from data_parser import (
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
-
+DEBUG = False
 
 def glorot_init(first_dim, second_dim):
-    epsilon = np.sqrt(6 / (first_dim + second_dim))
-    return np.random.uniform(-epsilon, epsilon, (first_dim, second_dim))
+    epsilon = torch.sqrt(torch.tensor(6.0) / (first_dim + second_dim))
+    return torch.empty(first_dim, second_dim).uniform_(-epsilon.item(), epsilon.item())
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
 
-# class BaseWindowTagger(nn.Module):
-#     def __init__(
-#
-#     )
-
-
-class WindowTagger(nn.Module):
-    def __init__(
-            self,
-            vocabulary,
-            labels,
-            hidden_dim,
-            learning_rate,
-            task,
-            print_file,
-            test_data,
-            embeddings,
-            embedding_dim=50,
-            window_shape=(2, 2),
-            padding_words=PADDING_WORDS,
-    ):
-        super(WindowTagger, self).__init__()
+class BaseWindowTagger(nn.Module):
+    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data,
+                 indices_of_embeddings_not_to_train_range, embedding_dim=50, window_shape=(2, 2),
+                 padding_words=PADDING_WORDS):
+        super(BaseWindowTagger, self).__init__()
         self.padding_words = padding_words
         self.unknown_word = UNK
-        self.vocabulary = {word: index for index, word in enumerate(vocabulary)}
+        self.vocabulary_dict = {word: index for index, word in enumerate(vocabulary)}
         self.labels = labels
         surrounding_window_length = window_shape[0] + window_shape[1]
         self.input_size = surrounding_window_length + 1
         assert surrounding_window_length == len(self.padding_words)
-        if embeddings is None:
-            self.embedding = nn.Embedding(len(self.vocabulary), embedding_dim)
-        else:
-            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
         self.fc1 = nn.Linear(embedding_dim * self.input_size, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, len(labels))
         self.criterion = torch.nn.CrossEntropyLoss().to(device)
@@ -69,11 +48,12 @@ class WindowTagger(nn.Module):
         self.task = task
         self.print_file = print_file
         self.test_data = test_data
+        self.indices_of_embeddings_not_to_train_range = indices_of_embeddings_not_to_train_range
 
     def get_word_index(self, word):
-        index = self.vocabulary.get(word)
+        index = self.vocabulary_dict.get(word)
         if index is None:
-            index = self.vocabulary.get(self.unknown_word)
+            index = self.vocabulary_dict.get(self.unknown_word)
         return index
 
     def get_indices_of_list_of_words(self, words):
@@ -147,6 +127,17 @@ class WindowTagger(nn.Module):
         predictions = filtered_predictions
         return predictions, true_labels
 
+
+class WindowTagger(BaseWindowTagger):
+    def __init__(self, vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data, embeddings,
+                 indices_of_embeddings_not_to_train_range, embedding_dim=50):
+        super(WindowTagger, self).__init__(vocabulary, labels, hidden_dim, learning_rate, task, print_file, test_data,
+                                           indices_of_embeddings_not_to_train_range)
+        if embeddings is None:
+            self.embedding = nn.Embedding(len(self.vocabulary_dict), embedding_dim)
+        else:
+            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False)
+
     def forward(self, window_word_indices):
         x = window_word_indices.to(device)
         embeds = self.embedding(x)  # Shape: (batch_size, 5, embedding_dim)
@@ -166,8 +157,9 @@ class WindowTagger(nn.Module):
         j = 1
         for labeled_sentence in train_labeled_sentences:
             j += 1
-            # if j > 3:
-            #     break
+            if DEBUG:
+                if j > 3:
+                    break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
                                                          dtype=torch.int32)
@@ -188,14 +180,18 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         j = 0
         for window_indices, label_vec in tqdm.tqdm(training_data, leave=False, disable=True):
             j += 1
-            # if j > 3:
-            #     break
+            if DEBUG:
+                if j > 3:
+                    break
             optimizer.zero_grad()
             output = model(window_indices)
             label_vec = label_vec.to(device)
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
+            freeze_indices = model.indices_of_embeddings_not_to_train_range
+            indices_to_freeze = torch.arange(freeze_indices[0], freeze_indices[1])
+            model.embedding.weight.grad[indices_to_freeze] = 0
             optimizer.step()
             del label_vec
             del output
@@ -214,8 +210,9 @@ def print_predictions_on_test(model, test_data, i):
     j = 1
     for window_indices in tqdm.tqdm(test_data, leave=False, disable=True):
         j += 1
-        # if j > 3:
-        #     break
+        if DEBUG:
+            if j > 3:
+                break
         output = model(window_indices[0])
         predictions.extend((torch.argmax(output, dim=1)).tolist())
     print_file = str(i) + "_test1_" + model.task + "_" + model.print_file.name
@@ -229,8 +226,9 @@ def calculate_accuracy_on_dev(dev_data, model):
     j = 0
     for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False, disable=True):
         j += 1
-        # if j > 3:
-        #     break
+        if DEBUG:
+            if j > 3:
+                break
         output = model(window_indices)
         true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
         predictions.extend((torch.argmax(output, dim=1)).tolist())
@@ -249,7 +247,7 @@ def task_1():
     now = datetime.now()
     hidden_dim = 20
     lr = 0.001
-    epochs = 100
+    epochs = 3
     output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
 
     with open(output_file, "a") as print_file:
@@ -259,15 +257,8 @@ def task_1():
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
             vocab = list(PADDING_WORDS) + [UNK] + vocabulary
-            window_tagger = WindowTagger(
-                vocab,
-                labels,
-                hidden_dim,
-                lr,
-                train_file[0:3],
-                print_file,
-                test_unlabeled_sentences,
-                None)
+            window_tagger = WindowTagger(vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
+                                         test_unlabeled_sentences, None, (0, 0))
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger, 8)
 
@@ -286,12 +277,12 @@ def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlab
     show_graph(accuracy_list, 'Accuracy')
 
 
-def task2():
+def task_2():
     files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
     hidden_dim = 20
     lr = 0.001
-    epochs = 100
+    epochs = 3
     embedding_dim = 50
     words_file_name = r"vocab.txt"
     vec_file_name = r"wordVectors.txt"
@@ -305,23 +296,17 @@ def task2():
             vocabulary, labels = extract_vocabulary_and_labels(train_labeled_sentences)
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            window_tagger = get_window_tagger_with_pre_trained_embeddings(
-                embedding_dim,
-                hidden_dim,
-                labels,
-                lr,
-                print_file,
-                test_unlabeled_sentences,
-                train_file,
-                vecs_pre_trained,
-                vocab_pre_trained,
-                vocabulary, )
+            full_vocab, E, indices_not_to_train = get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained,
+                                                                                     vocab_pre_trained, vocabulary)
+            window_tagger = WindowTagger(full_vocab, labels, hidden_dim, lr, train_file[0:3], print_file,
+                                         test_unlabeled_sentences, E, indices_not_to_train)
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger, 8)
 
 
 def main():
-    pass
+    task_1()
+    task_2()
 
 
 def show_graph(val_list, metric):
@@ -351,18 +336,7 @@ def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
     return dataloader
 
 
-def get_window_tagger_with_pre_trained_embeddings(
-        embedding_dim,
-        hidden_dim,
-        labels,
-        lr,
-        print_file,
-        test_unlabeled_sentences,
-        train_file,
-        vecs_pre_trained,
-        vocab_pre_trained,
-        vocabulary,
-):
+def get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained, vocab_pre_trained, vocabulary):
     vocab_to_add_embedding_vectors_lower_cased = []
     vocab_to_add_new_vectors = []
     for word in vocabulary:
@@ -372,31 +346,19 @@ def get_window_tagger_with_pre_trained_embeddings(
             else:
                 vocab_to_add_new_vectors.append(word)
     vocab_to_add_new_vectors = vocab_to_add_new_vectors + list(PADDING_WORDS) + [UNK]
-    new_words_vectors = torch.tensor(
-        glorot_init(len(vocab_to_add_new_vectors), embedding_dim), requires_grad=True
-    )
-    embedding_vectors_for_upper_cased = torch.tensor([
-        vecs_pre_trained[vocab_pre_trained.index(str.lower(word))]
-        for word in vocab_to_add_embedding_vectors_lower_cased])
+    new_words_vectors = glorot_init(len(vocab_to_add_new_vectors), embedding_dim).clone().detach().requires_grad_(True)
+    embedding_vectors_for_upper_cased = torch.tensor(np.array(
+        [vecs_pre_trained[vocab_pre_trained.index(str.lower(word))] for word in
+         vocab_to_add_embedding_vectors_lower_cased]))
     E = torch.cat([new_words_vectors,
                    embedding_vectors_for_upper_cased,
                    torch.tensor(vecs_pre_trained)]).float()
-    full_vocab = (
-            vocab_to_add_new_vectors
-            + vocab_to_add_embedding_vectors_lower_cased
-            + vocab_pre_trained
-    )
-    window_tagger = WindowTagger(
-        full_vocab,
-        labels,
-        hidden_dim,
-        lr,
-        train_file[0:3],
-        print_file,
-        test_unlabeled_sentences,
-        E,
-    )
-    return window_tagger
+    full_vocab = (vocab_to_add_new_vectors
+                  + vocab_to_add_embedding_vectors_lower_cased
+                  + vocab_pre_trained)
+    indices_not_to_train = (
+    len(vocab_to_add_new_vectors) + len(vocab_to_add_embedding_vectors_lower_cased), len(full_vocab))
+    return full_vocab, E, indices_not_to_train
 
 
 if __name__ == "__main__":
