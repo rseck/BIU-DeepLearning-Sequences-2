@@ -1,28 +1,8 @@
-def parse_labeled_data(file_path):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-
-    sentences = []
-    current_sentence = []
-
-    for line in lines:
-        line = line.strip()
-        if line:
-            word, label = line.split()
-            current_sentence.append((word, label))
-        else:
-            if current_sentence:
-                sentences.append(current_sentence)
-                current_sentence = []
-
-    if current_sentence:
-        sentences.append(current_sentence)
-
-    return sentences
+from utils import parse_labeled_data
 
 
 def parse_unlabeled_data(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path) as file:
         lines = file.readlines()
 
     sentences = []
@@ -58,7 +38,7 @@ def extract_vocabulary_and_labels(parsed_sentences):
 
 def main():
     # Example usage
-    for labeled_file, unlabeled_file in [('ner/dev', 'ner/test'), ('pos/dev', 'pos/test')]:
+    for labeled_file, unlabeled_file in [("ner/dev", "ner/test"), ("pos/dev", "pos/test")]:
         labeled_sentences = parse_labeled_data(labeled_file)
         unlabeled_sentences = parse_unlabeled_data(unlabeled_file)
         vocabulary, labels = extract_vocabulary_and_labels(labeled_sentences)
