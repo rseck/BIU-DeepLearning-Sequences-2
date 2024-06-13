@@ -18,7 +18,7 @@ from data_parser import (
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
-DEBUG = True
+DEBUG = False
 num_samples_for_debug = 35
 
 
