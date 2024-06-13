@@ -48,7 +48,8 @@ class BaseWindowTagger(nn.Module):
         self.task = task
         self.print_file = print_file
         self.test_data = test_data
-        self.indices_of_embeddings_not_to_train_range = indices_of_embeddings_not_to_train_range
+        indices_to_freeze = torch.arange(indices_of_embeddings_not_to_train_range[0], indices_of_embeddings_not_to_train_range[1])
+        self.indices_to_freeze = indices_to_freeze
 
     def get_word_index(self, word):
         index = self.vocabulary_dict.get(word)
@@ -189,9 +190,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
             loss = model.criterion(output, label_vec)
             running_loss += loss.item()
             loss.backward()
-            freeze_indices = model.indices_of_embeddings_not_to_train_range
-            indices_to_freeze = torch.arange(freeze_indices[0], freeze_indices[1])
-            model.embedding.weight.grad[indices_to_freeze] = 0
+            model.embedding.weight.grad[model.indices_to_freeze] = 0
             optimizer.step()
             del label_vec
             del output
@@ -357,7 +356,7 @@ def get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained, vocab_pr
                   + vocab_to_add_embedding_vectors_lower_cased
                   + vocab_pre_trained)
     indices_not_to_train = (
-    len(vocab_to_add_new_vectors) + len(vocab_to_add_embedding_vectors_lower_cased), len(full_vocab))
+        len(vocab_to_add_new_vectors) + len(vocab_to_add_embedding_vectors_lower_cased), len(full_vocab))
     return full_vocab, E, indices_not_to_train
 
 
