@@ -28,6 +28,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
 
+class BaseWindowTagger(nn.Module):
+    def __init__(
+
+    )
+
+
 class WindowTagger(nn.Module):
     def __init__(
             self,
