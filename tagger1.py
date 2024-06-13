@@ -15,9 +15,12 @@ from data_parser import (
     parse_unlabeled_data,
 )
 
+
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
-DEBUG = False
+DEBUG = True
+num_samples_for_debug = 35
+
 
 def glorot_init(first_dim, second_dim):
     epsilon = torch.sqrt(torch.tensor(6.0) / (first_dim + second_dim))
@@ -37,6 +40,7 @@ class BaseWindowTagger(nn.Module):
         self.unknown_word = UNK
         self.vocabulary_dict = {word: index for index, word in enumerate(vocabulary)}
         self.labels = labels
+        self.labels_dict = {label: index for index, label in enumerate(labels)}
         surrounding_window_length = window_shape[0] + window_shape[1]
         self.input_size = surrounding_window_length + 1
         assert surrounding_window_length == len(self.padding_words)
@@ -112,11 +116,6 @@ class BaseWindowTagger(nn.Module):
                 )
             )
 
-    def get_gold(self, labeled_sentence, word_index_in_sentence):
-        y = (torch.zeros(1, len(self.labels), dtype=torch.float64))
-        y[0][self.labels.index(labeled_sentence[word_index_in_sentence][1])] = 1
-        return y
-
     def get_ner_filtered_preds_and_labels(self, predictions, true_labels):
         filtered_predictions = []
         filtered_true_labels = []
@@ -154,19 +153,19 @@ class WindowTagger(BaseWindowTagger):
 
     def get_data_in_x_y_format(self, train_labeled_sentences):
         x = torch.empty((0, self.input_size), dtype=torch.int32)
-        y = torch.empty((0, len(self.labels)))
+        y = torch.empty(0, dtype=torch.long)
         j = 1
         for labeled_sentence in train_labeled_sentences:
             j += 1
             if DEBUG:
-                if j > 3:
+                if j > num_samples_for_debug:
                     break
             sentence = [labeled_word[0] for labeled_word in labeled_sentence]
             sentence_windows_word_indices = torch.tensor(self.get_windows_word_indices_for_sentence(sentence),
                                                          dtype=torch.int32)
             x = torch.cat((x, sentence_windows_word_indices), dim=0)
-            for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
-                y = torch.cat((y, self.get_gold(labeled_sentence, word_index_in_sentence)), dim=0)
+            labels = [self.labels_dict[labeled_word[1]] for labeled_word in labeled_sentence]
+            y = torch.cat((y, torch.tensor(labels, dtype=torch.long)), dim=0)
         return x, y
 
 
@@ -182,7 +181,7 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         for window_indices, label_vec in tqdm.tqdm(training_data, leave=False, disable=True):
             j += 1
             if DEBUG:
-                if j > 3:
+                if j > num_samples_for_debug:
                     break
             optimizer.zero_grad()
             output = model(window_indices)
@@ -210,7 +209,7 @@ def print_predictions_on_test(model, test_data, i):
     for window_indices in tqdm.tqdm(test_data, leave=False, disable=True):
         j += 1
         if DEBUG:
-            if j > 3:
+            if j > num_samples_for_debug:
                 break
         output = model(window_indices[0])
         predictions.extend((torch.argmax(output, dim=1)).tolist())
@@ -226,10 +225,10 @@ def calculate_accuracy_on_dev(dev_data, model):
     for window_indices, label_vec in tqdm.tqdm(dev_data, leave=False, disable=True):
         j += 1
         if DEBUG:
-            if j > 3:
+            if j > num_samples_for_debug:
                 break
         output = model(window_indices)
-        true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
+        true_labels.extend(label_vec.tolist())
         predictions.extend((torch.argmax(output, dim=1)).tolist())
     if model.task == "ner":
         predictions, true_labels = model.get_ner_filtered_preds_and_labels(predictions, true_labels)

@@ -14,7 +14,7 @@ from data_parser import (
     extract_vocabulary_and_labels,
     parse_unlabeled_data,
 )
-from tagger1 import show_graph, get_full_vocabulary_and_embeddings, BaseWindowTagger, DEBUG
+from tagger1 import show_graph, get_full_vocabulary_and_embeddings, BaseWindowTagger, DEBUG, num_samples_for_debug
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
@@ -78,7 +78,7 @@ class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
         window_indices = torch.empty((0, self.input_size), dtype=torch.int32)
         prefixes_indices = torch.empty((0, self.input_size), dtype=torch.int32)
         suffixes_indices = torch.empty((0, self.input_size), dtype=torch.int32)
-        y = torch.empty((0, len(self.labels)))
+        y = torch.empty(0, dtype=torch.long)
         j = 1
         for labeled_sentence in train_labeled_sentences:
             j += 1
@@ -95,8 +95,8 @@ class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
             suffixes_indices = torch.cat((suffixes_indices, torch.tensor(sentence_suffix_indices, dtype=torch.int32)),
                                          dim=0)
             window_indices = torch.cat((window_indices, sentence_windows_word_indices), dim=0)
-            for word_index_in_sentence, window_word_indices in enumerate(sentence_windows_word_indices):
-                y = torch.cat((y, self.get_gold(labeled_sentence, word_index_in_sentence)), dim=0)
+            labels = [self.labels_dict[labeled_word[1]] for labeled_word in labeled_sentence]
+            y = torch.cat((y, torch.tensor(labels, dtype=torch.long)), dim=0)
         return prefixes_indices, suffixes_indices, window_indices, y
 
     def get_prefix_and_suffix_indices_for_sentence(self, sentence_windows_word_indices):
@@ -165,7 +165,7 @@ def print_predictions_on_test(model, test_data, i):
     for prefixes_indices, suffixes_indices, window_indices in tqdm.tqdm(test_data, leave=False, disable=True):
         j += 1
         if DEBUG:
-            if j > 3:
+            if j > num_samples_for_debug:
                 break
         output = model(prefixes_indices, suffixes_indices, window_indices)
         predictions.extend((torch.argmax(output, dim=1)).tolist())
@@ -181,10 +181,10 @@ def calculate_accuracy_on_dev(dev_data, model):
     for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(dev_data, leave=False, disable=True):
         j += 1
         if DEBUG:
-            if j > 3:
+            if j > num_samples_for_debug:
                 break
         output = model(prefixes_indices, suffixes_indices, window_indices)
-        true_labels.extend((torch.argmax(label_vec, dim=1)).tolist())
+        true_labels.extend(label_vec.tolist())
         predictions.extend((torch.argmax(output, dim=1)).tolist())
     if model.task == "ner":
         predictions, true_labels = model.get_ner_filtered_preds_and_labels(predictions, true_labels)
@@ -313,7 +313,7 @@ def get_unlabeled_data_loader(unlabeled_sentences, window_tagger, batch_size=1):
     for sentence in unlabeled_sentences:
         j += 1
         if DEBUG:
-            if j > 3:
+            if j > num_samples_for_debug:
                 break
         sentence_windows_word_indices = torch.tensor(window_tagger.get_windows_word_indices_for_sentence(sentence),
                                                      dtype=torch.int32)
