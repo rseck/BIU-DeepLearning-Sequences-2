@@ -38,7 +38,7 @@ def train(
     model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int
 ):
     optimizer = torch.optim.Adam(model.parameters())
-    for i in epochs:
+    for i in range(epochs):
         loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
         model.train()
         for sentences, words, label in tqdm.tqdm(loader, leave=False):
