@@ -34,10 +34,11 @@ class ConvBaseSubWordModel(Module):
         return x
 
 
-def train(model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int):
+def train(
+    model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int
+):
     optimizer = torch.optim.Adam(model.parameters())
-    for i in tqdm.trange(epochs):
-        print(check_accuracy_on_dataset(model, dev_data))
+    for i in epochs:
         loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
         model.train()
         for sentences, words, label in tqdm.tqdm(loader, leave=False):
@@ -46,7 +47,7 @@ def train(model: Module, training_data: Dataset, dev_data: Dataset, batch_size: 
             loss = torch.nn.functional.cross_entropy(output, label[0])
             loss.backward()
             optimizer.step()
-
+        print(check_accuracy_on_dataset(model, dev_data))
 
 
 def main():
@@ -64,7 +65,9 @@ def main():
     sentences = parsed_sentences_from_files(training_files)
     labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
     max_word_len = max([len(word) for word, _ in labeled_words])
-    dataset = SentenceCharacterEmbeddingDataset(sentences, characters, labels, max_word_len, device)
+    dataset = SentenceCharacterEmbeddingDataset(
+        sentences, characters, labels, max_word_len, device
+    )
     dev_dataset = SentenceCharacterEmbeddingDataset(
         parsed_sentences_from_files(dev_files), characters, labels, max_word_len, device
     )
