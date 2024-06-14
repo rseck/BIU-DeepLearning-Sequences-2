@@ -33,11 +33,12 @@ class ConvBaseSubWordModel(Module):
         return x
 
 
-def train(model: Module, training_data: DataLoader, epochs: int):
+def train(model: Module, training_data: Dataset, batch_size: int, epochs: int):
     model.train()
     optimizer = torch.optim.Adam(model.parameters())
     for i in tqdm.trange(epochs):
-        for sentences, words, label in tqdm.tqdm(training_data, leave=False):
+        loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+        for sentences, words, label in tqdm.tqdm(loader, leave=False):
             optimizer.zero_grad()
             output = model(sentences[0], words)
             loss = torch.nn.functional.cross_entropy(output, label[0])
