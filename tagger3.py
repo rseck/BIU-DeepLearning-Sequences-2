@@ -120,6 +120,7 @@ class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
         else:
             prefix = word[0:3]
             suffix = word[-3:]
+        #todo word that is in test and not in dev and in pre trained vec. we don't register it's pre/suffix. think of a solution
         return self.prefixes[prefix], self.suffixes[suffix]
 
 
@@ -233,8 +234,7 @@ def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlab
     dev_dataloader = get_labeled_data_loader(dev_labeled_sentences, window_tagger, 8)
     test_dataloader = get_unlabeled_data_loader(test_unlabeled_sentences, window_tagger, 8)
     window_tagger.to(device)
-    loss_list, accuracy_list = train(window_tagger, train_dataloader, dev_dataloader, test_dataloader, epochs,
-                                     lr)
+    loss_list, accuracy_list = train(window_tagger, train_dataloader, dev_dataloader, test_dataloader, epochs, lr)
     print(f"loss list: {loss_list}", file=print_file)
     print(f"accuracy list: {accuracy_list}", file=print_file)
     show_graph(loss_list, 'Loss')
