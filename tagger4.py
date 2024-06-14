@@ -3,13 +3,14 @@ from pathlib import Path
 import torch
 import tqdm
 from torch.nn import Module, Conv1d, MaxPool1d, Linear
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from utils import (
     create_vocab_chars_and_labels_from_files,
     parsed_sentences_from_files,
     SentenceCharacterEmbeddingDataset,
     create_word_embedding_from_files,
+    check_accuracy_on_dataset,
 )
 
 
@@ -33,17 +34,19 @@ class ConvBaseSubWordModel(Module):
         return x
 
 
-def train(model: Module, training_data: Dataset, batch_size: int, epochs: int):
-    model.train()
+def train(model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int):
     optimizer = torch.optim.Adam(model.parameters())
     for i in tqdm.trange(epochs):
+        print(check_accuracy_on_dataset(model, dev_data))
         loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+        model.train()
         for sentences, words, label in tqdm.tqdm(loader, leave=False):
             optimizer.zero_grad()
             output = model(sentences[0], words)
             loss = torch.nn.functional.cross_entropy(output, label[0])
             loss.backward()
             optimizer.step()
+
 
 
 def main():
@@ -53,6 +56,7 @@ def main():
         (ner_path / "train", ner_path / "dev", ner_path / "test"),
         (pos_path / "train", pos_path / "dev", pos_path / "test"),
     ]
+    dev_files = [file[1] for file in files]
     batch_size = 1
     device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda")
     training_files = [file[0] for file in files]
@@ -60,10 +64,9 @@ def main():
     sentences = parsed_sentences_from_files(training_files)
     labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
     max_word_len = max([len(word) for word, _ in labeled_words])
-    loader = DataLoader(
-        SentenceCharacterEmbeddingDataset(sentences, characters, labels, max_word_len, device),
-        batch_size=batch_size,
-        shuffle=True,
+    dataset = SentenceCharacterEmbeddingDataset(sentences, characters, labels, max_word_len, device)
+    dev_dataset = SentenceCharacterEmbeddingDataset(
+        parsed_sentences_from_files(dev_files), characters, labels, max_word_len, device
     )
 
     # embedding = create_word_indexer(vocabulary)
@@ -75,7 +78,7 @@ def main():
         len(characters), max_word_len, len(labels), word_embeddings
     ).to(device=device)
 
-    train(model, loader, 100)
+    train(model, dataset, dev_dataset, batch_size, 100)
 
 
 if __name__ == "__main__":

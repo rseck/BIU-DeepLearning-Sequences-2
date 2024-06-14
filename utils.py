@@ -125,3 +125,17 @@ def create_word_embedding_from_files(vec_file_name: str, words_file_name: str):
     vocab = Path(words_file_name).read_text().split()
     vecs = torch.tensor(np.loadtxt(vec_file_name))
     return WordEmbedding(vecs, vocab)
+
+
+def check_accuracy_on_dataset(model, dataset):
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for sentences, words, labels in dataset:
+            output = model(sentences, words)
+            _, predicted = torch.max(output, 1)
+            _, true = torch.max(labels, 1)
+            total += true.size(0)
+            correct += (predicted == true).sum().item()
+    return correct / total
