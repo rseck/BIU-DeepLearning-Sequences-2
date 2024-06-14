@@ -28,7 +28,7 @@ def extract_vocabulary_and_labels(parsed_sentences):
     return list(words), list(labels)
 
 
-def parse_labeled_data(file_path: Path):
+def parse_labeled_data(file_path: Path, ignore_o: bool = False):
     lines = file_path.read_text().splitlines()
 
     sentences = []
@@ -38,6 +38,8 @@ def parse_labeled_data(file_path: Path):
         line = line.strip()
         if line:
             word, label = line.split()
+            if ignore_o and label == "O":
+                continue
             current_sentence.append((word, label))
         else:
             if current_sentence:
@@ -50,10 +52,10 @@ def parse_labeled_data(file_path: Path):
     return sentences
 
 
-def parsed_sentences_from_files(train_files: List[Path]):
+def parsed_sentences_from_files(train_files: List[Path], ignore_o: bool = False):
     parsed_sentences = []
     for file in train_files:
-        parsed_sentences.extend(parse_labeled_data(file))
+        parsed_sentences.extend(parse_labeled_data(file, ignore_o))
     return parsed_sentences
 
 

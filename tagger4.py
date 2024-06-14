@@ -62,14 +62,14 @@ def main():
     device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda")
     training_files = [file[0] for file in files]
     vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files)
-    sentences = parsed_sentences_from_files(training_files)
+    sentences = parsed_sentences_from_files(training_files, ignore_o=True)
     labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
     max_word_len = max([len(word) for word, _ in labeled_words])
     dataset = SentenceCharacterEmbeddingDataset(
         sentences, characters, labels, max_word_len, device
     )
     dev_dataset = SentenceCharacterEmbeddingDataset(
-        parsed_sentences_from_files(dev_files), characters, labels, max_word_len, device
+        parsed_sentences_from_files(dev_files, ignore_o=True), characters, labels, max_word_len, device
     )
 
     # embedding = create_word_indexer(vocabulary)
