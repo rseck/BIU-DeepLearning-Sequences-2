@@ -48,12 +48,12 @@ class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
             self.words_embedding = nn.Embedding(len(self.vocabulary_dict), embedding_dim)
         else:
             self.words_embedding = nn.Embedding.from_pretrained(words_embeddings, freeze=False)
-        self.prefixes = {prefix: index for index, prefix in
-                         enumerate(prefixes + list(self.padding_words) + [self.unknown_word])}
-        self.suffixes = {suffix: index for index, suffix in
-                         enumerate(suffixes + list(self.padding_words) + [self.unknown_word])}
-        self.prefix_embedding = nn.Embedding(len(self.prefixes), embedding_dim)
-        self.suffix_embedding = nn.Embedding(len(self.suffixes), embedding_dim)
+        self.prefixes_to_index_dict = {prefix: index for index, prefix in
+                                       enumerate(prefixes + list(self.padding_words) + [self.unknown_word])}
+        self.suffixes_to_index_dict = {suffix: index for index, suffix in
+                                       enumerate(suffixes + list(self.padding_words) + [self.unknown_word])}
+        self.prefix_embedding = nn.Embedding(len(self.prefixes_to_index_dict), embedding_dim)
+        self.suffix_embedding = nn.Embedding(len(self.suffixes_to_index_dict), embedding_dim)
 
     def forward(self, prefixes_indices, suffixes_indices, window_indices):
         window_indices = window_indices.to(device)
@@ -120,8 +120,11 @@ class WindowTaggerWithSuffixPrefix(BaseWindowTagger):
         else:
             prefix = word[0:3]
             suffix = word[-3:]
-        #todo word that is in test and not in dev and in pre trained vec. we don't register it's pre/suffix. think of a solution
-        return self.prefixes[prefix], self.suffixes[suffix]
+        if prefix not in self.prefixes_to_index_dict:
+            prefix = self.unknown_word
+        if suffix not in self.suffixes_to_index_dict:
+            suffix = self.unknown_word
+        return self.prefixes_to_index_dict[prefix], self.suffixes_to_index_dict[suffix]
 
 
 def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_data: DataLoader, epochs: int, lr=0.001):
@@ -293,7 +296,7 @@ def get_unique_prefixes_and_suffixes(vocabulary):
 
 
 def main():
-    without_pre_trained_vecs()
+    # without_pre_trained_vecs()
     with_pre_trained_vecs()
 
 
