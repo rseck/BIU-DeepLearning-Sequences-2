@@ -92,10 +92,10 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
     sentences = parsed_sentences_from_files(training_files, ignore_o=True)
     labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
     max_word_len = max([len(word) for word, _ in labeled_words])
-    dataset = SentenceCharacterEmbeddingDataset(
+    database = SentenceCharacterEmbeddingDataset(
         sentences, characters, labels, max_word_len, device
     )
-    dev_dataset = SentenceCharacterEmbeddingDataset(
+    dev_database = SentenceCharacterEmbeddingDataset(
         parsed_sentences_from_files(dev_files, ignore_o=True),
         characters,
         labels,
@@ -109,18 +109,18 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
         len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
-    losses, acc = train(model, dataset, dev_dataset, batch_size, epochs)
+    losses, acc = train(model, database, dev_database, batch_size, epochs)
     plt.plot(losses)
     plt.title("Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.savefig("loss.png")
+    plt.savefig(f"{dataset}-loss.png")
     plt.clf()
     plt.plot(acc)
     plt.title("Accuracy")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.savefig("accuracy.png")
+    plt.savefig(f"{dataset}-accuracy.png")
 
 
 if __name__ == "__main__":
