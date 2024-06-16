@@ -61,10 +61,10 @@ def train(
 @click.option(
     "--device",
     type=int,
-    default=torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda"),
+    default=1 if not torch.cuda.is_available() else None,
 )
-@click.option("vec_file_name", type=str, default="wordVectors.txt")
-@click.option("words_file_name", type=str, default="vocab.txt")
+@click.option("--vec_file_name", type=str, default="wordVectors.txt")
+@click.option("--words_file_name", type=str, default="vocab.txt")
 def main(dataset, epochs, device, vec_file_name, words_file_name):
     dataset_path = Path(dataset.value)
     files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]

@@ -5,6 +5,7 @@ import torch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from aenum import Enum
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -143,6 +144,6 @@ def check_accuracy_on_dataset(model, dataset):
     return correct / total
 
 
-class DatasetTypes:
+class DatasetTypes(Enum):
     NER = "ner"
     POS = "pos"
