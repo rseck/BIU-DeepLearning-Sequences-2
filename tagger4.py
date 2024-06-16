@@ -19,14 +19,17 @@ from utils import (
 class ConvBaseSubWordModel(Module):
     def __init__(self, num_of_characters: int, word_size: int, num_of_labels: int, embeddings):
         super(ConvBaseSubWordModel, self).__init__()
-        self.pool = MaxPool1d(word_size)
+        # self.pool = MaxPool1d(word_size)
         self.conv = Conv1d(num_of_characters, 30, 3)
+        self.dropout = torch.nn.Dropout(0.2)
         self.lin = Linear(30 + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
     def forward(self, embedded_words, words):
         x = self.conv(embedded_words)
         x = torch.max(x, dim=2).values
+        x = torch.relu(x)
+        x = self.dropout(x)
         existing_embedding = torch.stack([self.embeddings[word[0]] for word in words]).to(
             device=x.device, dtype=torch.float
         )
