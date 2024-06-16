@@ -3,7 +3,7 @@ from pathlib import Path
 import click
 import torch
 import tqdm
-from torch.nn import Module, Conv1d, MaxPool1d, Linear
+from torch.nn import Module, Conv1d, Linear
 from torch.utils.data import DataLoader, Dataset
 
 from utils import (
@@ -17,12 +17,18 @@ from utils import (
 
 
 class ConvBaseSubWordModel(Module):
-    def __init__(self, num_of_characters: int, word_size: int, num_of_labels: int, embeddings):
+    def __init__(
+        self,
+        character_embedding_size: int,
+        channel: int,
+        window_size: int,
+        num_of_labels: int,
+        embeddings,
+    ):
         super(ConvBaseSubWordModel, self).__init__()
-        # self.pool = MaxPool1d(word_size)
-        self.conv = Conv1d(num_of_characters, 30, 3)
+        self.conv = Conv1d(character_embedding_size, channel, window_size)
         self.dropout = torch.nn.Dropout(0.2)
-        self.lin = Linear(30 + len(embeddings[embeddings.UNK]), num_of_labels)
+        self.lin = Linear(channel + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
     def forward(self, embedded_words, words):
@@ -58,6 +64,8 @@ def train(
 @click.command()
 @click.option("--dataset", type=DatasetTypes, default=DatasetTypes.NER)
 @click.option("--epochs", type=int, default=100)
+@click.option("--channels", type=int, default=30)
+@click.option("--window_size", type=int, default=3)
 @click.option(
     "--device",
     type=int,
@@ -65,7 +73,7 @@ def train(
 )
 @click.option("--vec_file_name", type=str, default="wordVectors.txt")
 @click.option("--words_file_name", type=str, default="vocab.txt")
-def main(dataset, epochs, device, vec_file_name, words_file_name):
+def main(dataset, epochs, channels, window_size, device, vec_file_name, words_file_name):
     dataset_path = Path(dataset.value)
     files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
     dev_files = [file[1] for file in files]
@@ -89,7 +97,7 @@ def main(dataset, epochs, device, vec_file_name, words_file_name):
     word_embeddings = create_word_embedding_from_files(vec_file_name, words_file_name)
 
     model = ConvBaseSubWordModel(
-        len(characters), max_word_len, len(labels), word_embeddings
+        len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
     train(model, dataset, dev_dataset, batch_size, epochs)
