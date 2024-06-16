@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import click
+import matplotlib.pyplot as plt
 import torch
 import tqdm
 from torch.nn import Module, Conv1d, Linear
@@ -48,17 +49,25 @@ class ConvBaseSubWordModel(Module):
 def train(
     model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int
 ):
+    losses = []
+    acc = []
     optimizer = torch.optim.Adam(model.parameters())
     for i in range(epochs):
         loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
         model.train()
+        total_loss = 0
         for sentences, words, label in tqdm.tqdm(loader, leave=False):
             optimizer.zero_grad()
             output = model(sentences[0], words)
             loss = torch.nn.functional.cross_entropy(output, label[0])
             loss.backward()
+            total_loss += loss.item()
             optimizer.step()
-        print(check_accuracy_on_dataset(model, dev_data))
+        losses.append(total_loss)
+        accuracy_dev = check_accuracy_on_dataset(model, dev_data)
+        acc.append(accuracy_dev)
+        print(accuracy_dev)
+    return losses, acc
 
 
 @click.command()
@@ -100,7 +109,18 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
         len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
-    train(model, dataset, dev_dataset, batch_size, epochs)
+    losses, acc = train(model, dataset, dev_dataset, batch_size, epochs)
+    plt.plot(losses)
+    plt.title("Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.savefig("loss.png")
+    plt.clf()
+    plt.plot(acc)
+    plt.title("Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.savefig("accuracy.png")
 
 
 if __name__ == "__main__":
