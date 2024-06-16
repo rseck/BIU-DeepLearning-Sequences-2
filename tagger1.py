@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 import numpy as np
 import torch
@@ -14,7 +15,6 @@ from data_parser import (
     extract_vocabulary_and_labels,
     parse_unlabeled_data,
 )
-
 
 PADDING_WORDS = ("word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2")
 UNK = "UUUNKKK"
@@ -52,7 +52,8 @@ class BaseWindowTagger(nn.Module):
         self.task = task
         self.print_file = print_file
         self.test_data = test_data
-        indices_to_freeze = torch.arange(indices_of_embeddings_not_to_train_range[0], indices_of_embeddings_not_to_train_range[1])
+        indices_to_freeze = torch.arange(indices_of_embeddings_not_to_train_range[0],
+                                         indices_of_embeddings_not_to_train_range[1])
         self.indices_to_freeze = indices_to_freeze
 
     def get_word_index(self, word):
@@ -241,11 +242,11 @@ def calculate_accuracy_on_dev(dev_data, model):
 
 
 def task_1():
-    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
+    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
-    hidden_dim = 20
+    hidden_dim = 40
     lr = 0.001
-    epochs = 3
+    epochs = 35
     output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
 
     with open(output_file, "a") as print_file:
@@ -259,6 +260,7 @@ def task_1():
                                          test_unlabeled_sentences, None, (0, 0))
             run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences,
                                train_labeled_sentences, window_tagger, 8)
+
 
 def print_test_file(sentences, res_arr, labels, file_name):
     tag_index = 0
@@ -285,12 +287,12 @@ def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlab
     show_graph(accuracy_list, 'Accuracy')
 
 
-def task_2():
-    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
+def task_3():
+    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
     now = datetime.now()
-    hidden_dim = 20
+    hidden_dim = 40
     lr = 0.001
-    epochs = 3
+    epochs = 35
     embedding_dim = 50
     words_file_name = r"vocab.txt"
     vec_file_name = r"wordVectors.txt"
@@ -313,8 +315,19 @@ def task_2():
 
 
 def main():
-    task_1()
-    task_2()
+    if len(sys.argv) != 2:
+        print("Usage: python tagger1.py <part_k>")
+        print("Where <part_k> is 'part_1' or 'part_3'")
+        return
+
+    function_name = sys.argv[1]
+
+    if function_name == "part_1":
+        task_1()
+    elif function_name == "part_3":
+        task_3()
+    else:
+        print(f"Unknown function '{function_name}'. Please use 'part_1' or 'part_3'.")
 
 
 def show_graph(val_list, metric):

@@ -1,8 +1,8 @@
+import sys
 from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix
 from datetime import datetime
 import tqdm
@@ -136,7 +136,8 @@ def train(model: Module, training_data: DataLoader, dev_data: DataLoader, test_d
         running_loss = 0.0
         print("iteration {}\n".format(i), file=model.print_file)
         j = 0
-        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False,                                                                    disable=True):
+        for prefixes_indices, suffixes_indices, window_indices, label_vec in tqdm.tqdm(training_data, leave=False,
+                                                                                       disable=True):
             j += 1
             if DEBUG:
                 if j > 3:
@@ -203,9 +204,9 @@ def calculate_accuracy_on_dev(dev_data, model):
 def without_pre_trained_vecs():
     files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
-    hidden_dim = 20
+    hidden_dim = 40
     lr = 0.001
-    epochs = 3
+    epochs = 35
     output_file = f"tagger1_hidim_{hidden_dim}_lr_{lr}_epochs_{epochs}_{now}.txt"
 
     with open(output_file, "a") as print_file:
@@ -247,9 +248,9 @@ def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlab
 def with_pre_trained_vecs():
     files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
     now = datetime.now()
-    hidden_dim = 20
+    hidden_dim = 40
     lr = 0.001
-    epochs = 3
+    epochs = 35
     embedding_dim = 50
     words_file_name = r"vocab.txt"
     vec_file_name = r"wordVectors.txt"
@@ -264,8 +265,9 @@ def with_pre_trained_vecs():
             prefixes, suffixes = get_unique_prefixes_and_suffixes(vocabulary)
             dev_labeled_sentences = parse_labeled_data(dev_file)
             test_unlabeled_sentences = parse_unlabeled_data(test_file)
-            full_vocab, E, indices_not_to_train = get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained, vocab_pre_trained,
-                                                               vocabulary)
+            full_vocab, E, indices_not_to_train = get_full_vocabulary_and_embeddings(embedding_dim, vecs_pre_trained,
+                                                                                     vocab_pre_trained,
+                                                                                     vocabulary)
             window_tagger = WindowTaggerWithSuffixPrefix(
                 full_vocab,
                 labels,
@@ -296,8 +298,19 @@ def get_unique_prefixes_and_suffixes(vocabulary):
 
 
 def main():
-    # without_pre_trained_vecs()
-    with_pre_trained_vecs()
+    if len(sys.argv) != 2:
+        print("Usage: python tagger3.py <pretrained_embedding_choice>")
+        print("Where <pretrained_embedding_choice> is 'without_pre_trained_vecs' or 'with_pre_trained_vecs'")
+        return
+
+    function_name = sys.argv[1]
+
+    if function_name == "without_pre_trained_vecs":
+        without_pre_trained_vecs()
+    elif function_name == "with_pre_trained_vecs":
+        with_pre_trained_vecs()
+    else:
+        print(f"Unknown function '{function_name}'. Please use 'without_pre_trained_vecs' or 'with_pre_trained_vecs'.")
 
 
 def get_labeled_data_loader(train_labeled_sentences, window_tagger, batch_size=1):
