@@ -268,6 +268,7 @@ def print_test_file(sentences, res_arr, labels, file_name):
                 file.write(f"{labels[res_arr[tag_index]]}\n")
                 tag_index += 1
             file.write("\n")
+    print(tag_index)
 
 
 def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences, train_labeled_sentences,
