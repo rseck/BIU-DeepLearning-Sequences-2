@@ -141,3 +141,8 @@ def check_accuracy_on_dataset(model, dataset):
             total += true.size(0)
             correct += (predicted == true).sum().item()
     return correct / total
+
+
+class DatasetTypes:
+    NER = "ner"
+    POS = "pos"

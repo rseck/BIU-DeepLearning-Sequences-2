@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import click
 import torch
 import tqdm
 from torch.nn import Module, Conv1d, MaxPool1d, Linear
@@ -11,6 +12,7 @@ from utils import (
     SentenceCharacterEmbeddingDataset,
     create_word_embedding_from_files,
     check_accuracy_on_dataset,
+    DatasetTypes,
 )
 
 
@@ -50,16 +52,21 @@ def train(
         print(check_accuracy_on_dataset(model, dev_data))
 
 
-def main():
-    ner_path = Path("ner")
-    pos_path = Path("pos")
-    files = [
-        (ner_path / "train", ner_path / "dev", ner_path / "test"),
-        (pos_path / "train", pos_path / "dev", pos_path / "test"),
-    ]
+@click.command()
+@click.option("--dataset", type=DatasetTypes, default=DatasetTypes.NER)
+@click.option("--epochs", type=int, default=100)
+@click.option(
+    "--device",
+    type=int,
+    default=torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda"),
+)
+@click.option("vec_file_name", type=str, default="wordVectors.txt")
+@click.option("words_file_name", type=str, default="vocab.txt")
+def main(dataset, epochs, device, vec_file_name, words_file_name):
+    dataset_path = Path(dataset.value)
+    files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
     dev_files = [file[1] for file in files]
     batch_size = 1
-    device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda")
     training_files = [file[0] for file in files]
     vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files)
     sentences = parsed_sentences_from_files(training_files, ignore_o=True)
@@ -69,19 +76,20 @@ def main():
         sentences, characters, labels, max_word_len, device
     )
     dev_dataset = SentenceCharacterEmbeddingDataset(
-        parsed_sentences_from_files(dev_files, ignore_o=True), characters, labels, max_word_len, device
+        parsed_sentences_from_files(dev_files, ignore_o=True),
+        characters,
+        labels,
+        max_word_len,
+        device,
     )
 
-    # embedding = create_word_indexer(vocabulary)
-    vec_file_name = r"wordVectors.txt"
-    words_file_name = r"vocab.txt"
     word_embeddings = create_word_embedding_from_files(vec_file_name, words_file_name)
 
     model = ConvBaseSubWordModel(
         len(characters), max_word_len, len(labels), word_embeddings
     ).to(device=device)
 
-    train(model, dataset, dev_dataset, batch_size, 100)
+    train(model, dataset, dev_dataset, batch_size, epochs)
 
 
 if __name__ == "__main__":
