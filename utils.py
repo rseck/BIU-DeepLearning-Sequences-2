@@ -1,10 +1,10 @@
 import math
-
-import numpy as np
-import torch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 from aenum import Enum
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -152,3 +152,12 @@ def check_accuracy_on_dataset(model, dataset):
 class DatasetTypes(Enum):
     NER = "ner"
     POS = "pos"
+
+
+def save_plot(data, y_value, title, file_name):
+    plt.plot(data)
+    plt.title(title)
+    plt.xlabel("Epoch")
+    plt.ylabel(y_value)
+    plt.savefig(f"{file_name}.png")
+    plt.clf()

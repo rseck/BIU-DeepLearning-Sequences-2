@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import List
 
 import click
-import matplotlib.pyplot as plt
 import torch
 import tqdm
 from torch.nn import Module, Conv1d, Linear
@@ -16,7 +15,19 @@ from utils import (
     check_accuracy_on_dataset,
     DatasetTypes,
     correct_predictions,
+    save_plot,
 )
+
+
+def save_results(acc, losses, train_acc, file_initial, title_initial, epochs):
+    save_plot(losses, "Loss", f"{title_initial}-loss", f"{file_initial}-{epochs}-loss")
+    save_plot(acc, "Accuracy", f"{title_initial}-accuracy", f"{file_initial}-{epochs}-accuracy")
+    save_plot(
+        train_acc,
+        "Training Accuracy",
+        f"{title_initial}-train-accuracy",
+        f"{file_initial}-{epochs}-train-accuracy",
+    )
 
 
 class ConvBaseSubWordModel(Module):
@@ -61,6 +72,7 @@ def train(
     batch_size: int,
     epochs: int,
     model_name: str,
+    title_initial: str,
 ):
     losses = []
     acc = []
@@ -84,8 +96,9 @@ def train(
             total_loss += loss.item()
             optimizer.step()
 
-        if i % 10 == 0:
+        if i % 10 == 0 and i != 0:
             torch.save(model.state_dict(), f"{model_name}-{i}.pth")
+            save_results(acc, losses, train_acc, model_name, title_initial, epochs)
         acc_train = correct / total_items
         train_acc.append(acc_train)
         losses.append(total_loss)
@@ -137,31 +150,11 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
         len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
+    files_init = f"{dataset}-{window_size}-{channels}"
     losses, acc, train_acc = train(
-        model,
-        database,
-        dev_database,
-        batch_size,
-        epochs,
-        f"{dataset}-{channels}-{epochs}-{window_size}",
+        model, database, dev_database, batch_size, epochs, files_init, dataset
     )
-    plt.plot(losses)
-    plt.title(f"{dataset} Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}loss.png")
-    plt.clf()
-    plt.plot(acc)
-    plt.title(f"{dataset} Accuracy")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}accuracy.png")
-    plt.clf()
-    plt.plot(train_acc)
-    plt.title(f"{dataset} Training Accuracy")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}-accuracy.png")
+    save_results(acc, losses, train_acc, files_init, dataset, epochs)
 
 
 if __name__ == "__main__":
