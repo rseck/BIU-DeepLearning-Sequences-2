@@ -60,10 +60,15 @@ def parsed_sentences_from_files(train_files: List[Path], ignore_o: bool = False)
     return parsed_sentences
 
 
-def create_vocab_chars_and_labels_from_files(train_files: List[Path]):
+def parse_test_file(test_file: Path):
+    return test_file.read_text().splitlines()
+
+
+def create_vocab_chars_and_labels_from_files(train_files: List[Path], test_files: Path):
+    unparsed_data = [word for word in parse_test_file(test_files) if word]
     parsed_sentences = parsed_sentences_from_files(train_files)
     vocab, labels = extract_vocabulary_and_labels(parsed_sentences)
-    vocab = list(PADDING_WORDS) + [UNK] + vocab
+    vocab = list(PADDING_WORDS) + [UNK] + vocab + unparsed_data
     characters = "".join(set("".join(vocab)))
     return vocab, characters, labels
 

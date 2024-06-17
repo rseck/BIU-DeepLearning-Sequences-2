@@ -114,19 +114,19 @@ def train(
 @click.option("--words_file_name", type=str, default="vocab.txt")
 def main(dataset, epochs, batch_size, channels, window_size, device, vec_file_name, words_file_name):
     dataset_path = Path(dataset.value)
-    files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
-    dev_files = [file[1] for file in files]
-    training_files = [file[0] for file in files]
-    vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files)
+    train_file = dataset_path / "train"
+    dev_file = dataset_path / "dev"
+    test_file = dataset_path / "test"
+    training_files = [train_file]
+    vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files, test_file)
     sentences = parsed_sentences_from_files(training_files, ignore_o=True)
-    labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
-    max_word_len = max([len(word) for word, _ in labeled_words])
+    max_word_len = max([len(word) for word in vocabulary])
 
     database = SentenceCharacterEmbeddingDataset(
         sentences, characters, labels, max_word_len, batch_size, device
     )
     dev_database = SentenceCharacterEmbeddingDataset(
-        parsed_sentences_from_files(dev_files, ignore_o=True),
+        parsed_sentences_from_files([dev_file], ignore_o=True),
         characters,
         labels,
         max_word_len,
