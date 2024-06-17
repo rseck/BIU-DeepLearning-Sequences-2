@@ -92,7 +92,7 @@ class SentenceCharacterEmbeddingDataset(Dataset):
         word_tensor = torch.tensor(
             [
                 [0] * (padding_size // 2)
-                + [self.characters.index(character) for character in word]
+                + [self.characters.index(character) + 1 for character in word]
                 + [0] * math.ceil(padding_size / 2)
                 for word in words
                 for padding_size in [self.max_word_size - len(word)]
@@ -100,7 +100,7 @@ class SentenceCharacterEmbeddingDataset(Dataset):
             device=self.device,
             dtype=torch.float,
         )
-        word_embedding = torch.nn.functional.one_hot(word_tensor.long(), len(self.characters))
+        word_embedding = torch.nn.functional.one_hot(word_tensor.long(), len(self.characters) + 1)
         word_embedding = word_embedding.swapaxes(-1, -2)
         labels = torch.tensor(
             [self.labels.index(label) for word, label in sentence],

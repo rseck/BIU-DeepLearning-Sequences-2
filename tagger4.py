@@ -147,7 +147,7 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
     word_embeddings = create_word_embedding_from_files(vec_file_name, words_file_name)
 
     model = ConvBaseSubWordModel(
-        len(characters), channels, window_size, len(labels), word_embeddings
+        len(characters) + 1, channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
     files_init = f"{dataset}-{window_size}-{channels}"
