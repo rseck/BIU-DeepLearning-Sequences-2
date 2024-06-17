@@ -57,13 +57,14 @@ def train(
         total_loss = 0
         total_items = 0
         correct = 0
-        for sentences, words, label in tqdm.tqdm(loader, leave=False):
+        for sentences, words, labels in tqdm.tqdm(loader, leave=False):
             sentence = sentences[0]
+            label = labels[0]
             optimizer.zero_grad()
             output = model(sentence, words)
             total_items += len(sentence)
             correct += correct_predictions(output, label)
-            loss = torch.nn.functional.cross_entropy(output, label[0])
+            loss = torch.nn.functional.cross_entropy(output, label)
             loss.backward()
             total_loss += loss.item()
             optimizer.step()
