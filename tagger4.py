@@ -34,26 +34,19 @@ class ConvBaseSubWordModel(Module):
     def __init__(
         self,
         character_embedding_size: int,
-        channel: List[int],
-        window_size: List[int],
+        channel: int,
+        window_size: int,
         num_of_labels: int,
         embeddings,
     ):
         super(ConvBaseSubWordModel, self).__init__()
-        self.conv = [
-            Conv1d(in_c, out_c, w)
-            for out_c, in_c, w in zip(
-                channel, [character_embedding_size] + channel[:-1], window_size
-            )
-        ]
-        self.lin = Linear(channel[-1] + len(embeddings[embeddings.UNK]), num_of_labels)
+        self.conv = Conv1d(character_embedding_size, channel, window_size)
+        self.lin = Linear(channel + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
     def forward(self, embedded_words, words):
         x = embedded_words
-        for conv in self.conv:
-            x = torch.relu(conv(x))
-        # x = self.conv(embedded_words)
+        x = self.conv(embedded_words)
         x = torch.max(x, dim=2).values
         x = torch.relu(x)
         existing_embedding = torch.stack([self.embeddings[word[0]] for word in words]).to(
@@ -111,8 +104,8 @@ def train(
 @click.command()
 @click.option("--dataset", type=DatasetTypes, default=DatasetTypes.NER)
 @click.option("--epochs", type=int, default=100)
-@click.option("--channels", multiple=True, type=int, default=[30])
-@click.option("--window_size", multiple=True, type=int, default=[3])
+@click.option("--channels", type=int, default=[30])
+@click.option("--window_size", type=int, default=[3])
 @click.option(
     "--device",
     type=int,
@@ -121,9 +114,6 @@ def train(
 @click.option("--vec_file_name", type=str, default="wordVectors.txt")
 @click.option("--words_file_name", type=str, default="vocab.txt")
 def main(dataset, epochs, channels, window_size, device, vec_file_name, words_file_name):
-    channels = list(sorted(channels))
-    window_size = list(sorted(window_size))
-    assert len(channels) == len(window_size), "Channels and window size must be the same length"
     dataset_path = Path(dataset.value)
     files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
     dev_files = [file[1] for file in files]
@@ -133,6 +123,7 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
     sentences = parsed_sentences_from_files(training_files, ignore_o=True)
     labeled_words = [labeled_word for sentence in sentences for labeled_word in sentence]
     max_word_len = max([len(word) for word, _ in labeled_words])
+
     database = SentenceCharacterEmbeddingDataset(
         sentences, characters, labels, max_word_len, device
     )
