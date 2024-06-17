@@ -77,10 +77,7 @@ def encode_words(words: List[str], characters: str, max_word_size: int, device: 
     word_tensor = torch.tensor(
         [
             [0] * (padding_size // 2)
-            + [
-                characters.index(character) + 1 if character in characters else 0
-                for character in word
-            ]
+            + [characters.index(character) + 1 for character in word]
             + [0] * math.ceil(padding_size / 2)
             for word in words
             for padding_size in [max_word_size - len(word)]
