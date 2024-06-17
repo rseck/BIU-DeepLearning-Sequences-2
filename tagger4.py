@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 import click
 import torch
@@ -45,7 +44,6 @@ class ConvBaseSubWordModel(Module):
         self.embeddings = embeddings
 
     def forward(self, embedded_words, words):
-        x = embedded_words
         x = self.conv(embedded_words)
         x = torch.max(x, dim=2).values
         x = torch.relu(x)
@@ -72,7 +70,7 @@ def train(
     train_acc = []
     optimizer = torch.optim.Adam(model.parameters())
     for i in range(epochs):
-        loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+        loader = DataLoader(training_data, shuffle=True)
         model.train()
         total_loss = 0
         total_items = 0
@@ -104,8 +102,9 @@ def train(
 @click.command()
 @click.option("--dataset", type=DatasetTypes, default=DatasetTypes.NER)
 @click.option("--epochs", type=int, default=100)
-@click.option("--channels", type=int, default=[30])
-@click.option("--window_size", type=int, default=[3])
+@click.option("--batch_size", type=int, default=6)
+@click.option("--channels", type=int, default=30)
+@click.option("--window_size", type=int, default=3)
 @click.option(
     "--device",
     type=int,
@@ -113,11 +112,10 @@ def train(
 )
 @click.option("--vec_file_name", type=str, default="wordVectors.txt")
 @click.option("--words_file_name", type=str, default="vocab.txt")
-def main(dataset, epochs, channels, window_size, device, vec_file_name, words_file_name):
+def main(dataset, epochs, batch_size, channels, window_size, device, vec_file_name, words_file_name):
     dataset_path = Path(dataset.value)
     files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
     dev_files = [file[1] for file in files]
-    batch_size = 1
     training_files = [file[0] for file in files]
     vocabulary, characters, labels = create_vocab_chars_and_labels_from_files(training_files)
     sentences = parsed_sentences_from_files(training_files, ignore_o=True)
@@ -125,14 +123,15 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
     max_word_len = max([len(word) for word, _ in labeled_words])
 
     database = SentenceCharacterEmbeddingDataset(
-        sentences, characters, labels, max_word_len, device
+        sentences, characters, labels, max_word_len, batch_size, device
     )
     dev_database = SentenceCharacterEmbeddingDataset(
         parsed_sentences_from_files(dev_files, ignore_o=True),
         characters,
         labels,
         max_word_len,
-        device,
+        batch_size,
+        device=device,
     )
 
     word_embeddings = create_word_embedding_from_files(vec_file_name, words_file_name)

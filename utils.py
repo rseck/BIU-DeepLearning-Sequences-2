@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from aenum import Enum
 from torch import Tensor
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 PADDING_WORDS = ["word_minus_2", "word_minus_1", "word_plus_1", "word_plus_2"]
 UNK = "UNK"
@@ -75,19 +75,22 @@ class SentenceCharacterEmbeddingDataset(Dataset):
         characters: str,
         labels: List[str],
         max_word_size: int,
-        device: torch.device,
+        batch_size: int = 1,
+        device: torch.device = None,
     ):
         self.sentences = sentences
         self.characters = characters
         self.labels = labels
         self.max_word_size = max_word_size
+        self.batch_size = batch_size
         self.device = device
 
     def __len__(self):
-        return len(self.sentences)
+        return len(self.sentences) // self.batch_size
 
     def __getitem__(self, idx):
-        sentence = self.sentences[idx]
+        sentence = self.sentences[idx * self.batch_size : (idx + 1) * self.batch_size]
+        sentence = [data for s in sentence for data in s]
         words = [word for word, _ in sentence]
         word_tensor = torch.tensor(
             [
@@ -100,7 +103,9 @@ class SentenceCharacterEmbeddingDataset(Dataset):
             device=self.device,
             dtype=torch.float,
         )
-        word_embedding = torch.nn.functional.one_hot(word_tensor.long(), len(self.characters) + 1)
+        word_embedding = torch.nn.functional.one_hot(
+            word_tensor.long(), len(self.characters) + 1
+        )
         word_embedding = word_embedding.swapaxes(-1, -2)
         labels = torch.tensor(
             [self.labels.index(label) for word, label in sentence],
@@ -137,14 +142,17 @@ def correct_predictions(output, labels):
 
 
 def check_accuracy_on_dataset(model, dataset):
+    loader = DataLoader(dataset)
     model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
-        for sentences, words, labels in dataset:
-            output = model(sentences, words)
-            correct_pred = correct_predictions(output, labels)
-            total += labels.size(0)
+        for sentences, words, labels in loader:
+            label = labels[0]
+            sentence = sentences[0]
+            output = model(sentence, words)
+            correct_pred = correct_predictions(output, label)
+            total += label.size(0)
             correct += correct_pred
     return correct / total
 
