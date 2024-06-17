@@ -67,11 +67,12 @@ def train(
             loss.backward()
             total_loss += loss.item()
             optimizer.step()
-        train_acc.append(correct / total_items)
+        acc_train = correct / total_items
+        train_acc.append(acc_train)
         losses.append(total_loss)
         accuracy_dev = check_accuracy_on_dataset(model, dev_data)
         acc.append(accuracy_dev)
-        print(accuracy_dev)
+        print(acc_train, accuracy_dev)
     return losses, acc, train_acc
 
 
