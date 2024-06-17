@@ -3,16 +3,23 @@ Task No. 2 in deep learning for sequences course by Yoav Goldberg. semester b ye
 
 all executions run ner and pos learning process. 
 the code also evaluates dev set accuracy in every epoch and prints test evaluation every epoch.
+the code requires datat_parser.py and utils.
 
 part 1
 to run tagger1, simply run 'python tagger1.py part_1'
+it has fixed parameters, and it requires 'dev', 'test' and 'train' data files in 'pos' and 'ner' folder in root.
+it also requires the pre-trained embeddings files given, also in root.
 
 part 3
 to run tagger2, simply run 'python tagger1.py part_3'
+it has fixed parameters, and it requires 'dev', 'test' and 'train' data files in 'pos' and 'ner' folder in root.
+it also requires the pre-trained embeddings files given, also in root.
 
 part 4
 to run tagger3 with pre-trained embeddings, simply run python tagger3.py with_pre_trained_vecs
 to run tagger3 without pre-trained embeddings, simply run python tagger3.py without_pre_trained_vecs
+it has fixed parameters, and it requires 'dev', 'test' and 'train' data files in 'pos' and 'ner' folder in root.
+it also requires the pre-trained embeddings files given, also in root.
 
 part 5
 For this part you'll need the tagger4.py and the utils.py files.
