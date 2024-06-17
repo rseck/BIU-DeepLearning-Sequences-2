@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List
 
 import click
 import matplotlib.pyplot as plt
@@ -13,7 +14,8 @@ from utils import (
     SentenceCharacterEmbeddingDataset,
     create_word_embedding_from_files,
     check_accuracy_on_dataset,
-    DatasetTypes, correct_predictions,
+    DatasetTypes,
+    correct_predictions,
 )
 
 
@@ -21,18 +23,26 @@ class ConvBaseSubWordModel(Module):
     def __init__(
         self,
         character_embedding_size: int,
-        channel: int,
-        window_size: int,
+        channel: List[int],
+        window_size: List[int],
         num_of_labels: int,
         embeddings,
     ):
         super(ConvBaseSubWordModel, self).__init__()
-        self.conv = Conv1d(character_embedding_size, channel, window_size)
-        self.lin = Linear(channel + len(embeddings[embeddings.UNK]), num_of_labels)
+        self.conv = [
+            Conv1d(in_c, out_c, w)
+            for out_c, in_c, w in zip(
+                channel, [character_embedding_size] + channel[:-1], window_size
+            )
+        ]
+        self.lin = Linear(channel[-1] + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
     def forward(self, embedded_words, words):
-        x = self.conv(embedded_words)
+        x = embedded_words
+        for conv in self.conv:
+            x = torch.relu(conv(x))
+        # x = self.conv(embedded_words)
         x = torch.max(x, dim=2).values
         x = torch.relu(x)
         existing_embedding = torch.stack([self.embeddings[word[0]] for word in words]).to(
@@ -45,7 +55,12 @@ class ConvBaseSubWordModel(Module):
 
 
 def train(
-    model: Module, training_data: Dataset, dev_data: Dataset, batch_size: int, epochs: int
+    model: Module,
+    training_data: Dataset,
+    dev_data: Dataset,
+    batch_size: int,
+    epochs: int,
+    model_name: str,
 ):
     losses = []
     acc = []
@@ -68,6 +83,9 @@ def train(
             loss.backward()
             total_loss += loss.item()
             optimizer.step()
+
+        if i % 10 == 0:
+            torch.save(model.state_dict(), f"{model_name}-{i}.pth")
         acc_train = correct / total_items
         train_acc.append(acc_train)
         losses.append(total_loss)
@@ -80,8 +98,8 @@ def train(
 @click.command()
 @click.option("--dataset", type=DatasetTypes, default=DatasetTypes.NER)
 @click.option("--epochs", type=int, default=100)
-@click.option("--channels", type=int, default=30)
-@click.option("--window_size", type=int, default=3)
+@click.option("--channels", multiple=True, type=int, default=[30])
+@click.option("--window_size", multiple=True, type=int, default=[3])
 @click.option(
     "--device",
     type=int,
@@ -90,6 +108,9 @@ def train(
 @click.option("--vec_file_name", type=str, default="wordVectors.txt")
 @click.option("--words_file_name", type=str, default="vocab.txt")
 def main(dataset, epochs, channels, window_size, device, vec_file_name, words_file_name):
+    channels = list(sorted(channels))
+    window_size = list(sorted(window_size))
+    assert len(channels) == len(window_size), "Channels and window size must be the same length"
     dataset_path = Path(dataset.value)
     files = [(dataset_path / "train", dataset_path / "dev", dataset_path / "test")]
     dev_files = [file[1] for file in files]
@@ -116,7 +137,14 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
         len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
-    losses, acc, train_acc = train(model, database, dev_database, batch_size, epochs)
+    losses, acc, train_acc = train(
+        model,
+        database,
+        dev_database,
+        batch_size,
+        epochs,
+        f"{dataset}-{channels}-{epochs}-{window_size}",
+    )
     plt.plot(losses)
     plt.title(f"{dataset} Loss")
     plt.xlabel("Epoch")
