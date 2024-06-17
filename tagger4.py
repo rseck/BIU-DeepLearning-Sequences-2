@@ -13,7 +13,7 @@ from utils import (
     SentenceCharacterEmbeddingDataset,
     create_word_embedding_from_files,
     check_accuracy_on_dataset,
-    DatasetTypes,
+    DatasetTypes, correct_predictions,
 )
 
 
@@ -28,7 +28,6 @@ class ConvBaseSubWordModel(Module):
     ):
         super(ConvBaseSubWordModel, self).__init__()
         self.conv = Conv1d(character_embedding_size, channel, window_size)
-        self.dropout = torch.nn.Dropout(0.2)
         self.lin = Linear(channel + len(embeddings[embeddings.UNK]), num_of_labels)
         self.embeddings = embeddings
 
@@ -36,7 +35,6 @@ class ConvBaseSubWordModel(Module):
         x = self.conv(embedded_words)
         x = torch.max(x, dim=2).values
         x = torch.relu(x)
-        x = self.dropout(x)
         existing_embedding = torch.stack([self.embeddings[word[0]] for word in words]).to(
             device=x.device, dtype=torch.float
         )
@@ -51,23 +49,30 @@ def train(
 ):
     losses = []
     acc = []
+    train_acc = []
     optimizer = torch.optim.Adam(model.parameters())
     for i in range(epochs):
         loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
         model.train()
         total_loss = 0
+        total_items = 0
+        correct = 0
         for sentences, words, label in tqdm.tqdm(loader, leave=False):
+            sentence = sentences[0]
             optimizer.zero_grad()
-            output = model(sentences[0], words)
+            output = model(sentence, words)
+            total_items += len(sentence)
+            correct += correct_predictions(output, label)
             loss = torch.nn.functional.cross_entropy(output, label[0])
             loss.backward()
             total_loss += loss.item()
             optimizer.step()
+        train_acc.append(correct / total_items)
         losses.append(total_loss)
         accuracy_dev = check_accuracy_on_dataset(model, dev_data)
         acc.append(accuracy_dev)
         print(accuracy_dev)
-    return losses, acc
+    return losses, acc, train_acc
 
 
 @click.command()
@@ -109,18 +114,24 @@ def main(dataset, epochs, channels, window_size, device, vec_file_name, words_fi
         len(characters), channels, window_size, len(labels), word_embeddings
     ).to(device=device)
 
-    losses, acc = train(model, database, dev_database, batch_size, epochs)
+    losses, acc, train_acc = train(model, database, dev_database, batch_size, epochs)
     plt.plot(losses)
-    plt.title("Loss")
+    plt.title(f"{dataset} Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.savefig(f"{dataset}-loss.png")
+    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}loss.png")
     plt.clf()
     plt.plot(acc)
-    plt.title("Accuracy")
+    plt.title(f"{dataset} Accuracy")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.savefig(f"{dataset}-accuracy.png")
+    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}accuracy.png")
+    plt.clf()
+    plt.plot(train_acc)
+    plt.title(f"{dataset} Training Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.savefig(f"{dataset}-{channels}-{epochs}-{window_size}-accuracy.png")
 
 
 if __name__ == "__main__":
