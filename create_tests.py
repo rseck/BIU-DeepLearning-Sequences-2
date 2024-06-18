@@ -50,7 +50,7 @@ def main(device, part, vec_file_name, words_file_name, model_path):
         value_index = torch.argmax(output, dim=1)[0]
         results.append(labels[value_index])
 
-    Path(f"test{part}.{dataset.lower()}").write_text("\n".join(results))
+    Path(f"test{part}.{dataset_path}").write_text("\n".join(results))
 
 
 if __name__ == "__main__":
