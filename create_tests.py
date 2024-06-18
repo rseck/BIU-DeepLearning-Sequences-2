@@ -23,6 +23,7 @@ from utils import (
 @click.option("--model_path", type=Path)
 def main(device, part, vec_file_name, words_file_name, model_path):
     dataset, window_size, channels, _ = model_path.stem.split("-")
+    window_size, channels = int(window_size), int(channels)
     dataset_path = Path(dataset.split(".")[-1].lower())
     train_file = dataset_path / "train"
     test_file = dataset_path / "test"
@@ -49,7 +50,7 @@ def main(device, part, vec_file_name, words_file_name, model_path):
         value_index = torch.argmax(output, dim=1)[0]
         results.append(labels[value_index])
 
-    Path(f"test{part}.{dataset.value}").write_text("\n".join(results))
+    Path(f"test{part}.{dataset.lower()}").write_text("\n".join(results))
 
 
 if __name__ == "__main__":
