@@ -1,3 +1,7 @@
+# Roee esquira, ID 309840791
+# Yedidia Kfir, ID 209365188
+
+
 import sys
 from pathlib import Path
 import numpy as np

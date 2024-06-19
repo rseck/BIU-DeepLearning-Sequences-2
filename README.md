@@ -1,6 +1,9 @@
 # BIU-DeepLearning-Sequences-2
 Task No. 2 in deep learning for sequences course by Yoav Goldberg. semester b year 23-24
 
+Roee esquira, ID 309840791
+Yedidia Kfir, ID 209365188
+
 all executions run ner and pos learning process. 
 the code also evaluates dev set accuracy in every epoch and prints test evaluation every epoch.
 the code requires datat_parser.py and utils.

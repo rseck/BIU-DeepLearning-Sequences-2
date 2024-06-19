@@ -1,3 +1,6 @@
+# Roee esquira, ID 309840791
+# Yedidia Kfir, ID 209365188
+
 import math
 from pathlib import Path
 from typing import Dict, List, Tuple

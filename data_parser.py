@@ -1,3 +1,6 @@
+# Roee esquira, ID 309840791
+# Yedidia Kfir, ID 209365188
+
 def parse_labeled_data(file_path):
     with open(file_path) as file:
         lines = file.readlines()
