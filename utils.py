@@ -63,12 +63,34 @@ def parsed_sentences_from_files(train_files: List[Path], ignore_o: bool = False)
     return parsed_sentences
 
 
-def create_vocab_chars_and_labels_from_files(train_files: List[Path]):
+def parse_test_file(test_file: Path):
+    return test_file.read_text().splitlines()
+
+
+def create_vocab_chars_and_labels_from_files(train_files: List[Path], test_files: Path):
+    unparsed_data = [word for word in parse_test_file(test_files) if word]
     parsed_sentences = parsed_sentences_from_files(train_files)
     vocab, labels = extract_vocabulary_and_labels(parsed_sentences)
-    vocab = list(PADDING_WORDS) + [UNK] + vocab
+    vocab = list(PADDING_WORDS) + [UNK] + vocab + unparsed_data
     characters = "".join(set("".join(vocab)))
     return vocab, characters, labels
+
+
+def encode_words(words: List[str], characters: str, max_word_size: int, device: torch.device):
+    word_tensor = torch.tensor(
+        [
+            [0] * (padding_size // 2)
+            + [characters.index(character) + 1 for character in word]
+            + [0] * math.ceil(padding_size / 2)
+            for word in words
+            for padding_size in [max_word_size - len(word)]
+        ],
+        device=device,
+        dtype=torch.float,
+    )
+    word_embedding = torch.nn.functional.one_hot(word_tensor.long(), len(characters) + 1)
+    word_embedding = word_embedding.swapaxes(-1, -2)
+    return word_embedding.float()
 
 
 class SentenceCharacterEmbeddingDataset(Dataset):
@@ -95,21 +117,7 @@ class SentenceCharacterEmbeddingDataset(Dataset):
         sentence = self.sentences[idx * self.batch_size : (idx + 1) * self.batch_size]
         sentence = [data for s in sentence for data in s]
         words = [word for word, _ in sentence]
-        word_tensor = torch.tensor(
-            [
-                [0] * (padding_size // 2)
-                + [self.characters.index(character) + 1 for character in word]
-                + [0] * math.ceil(padding_size / 2)
-                for word in words
-                for padding_size in [self.max_word_size - len(word)]
-            ],
-            device=self.device,
-            dtype=torch.float,
-        )
-        word_embedding = torch.nn.functional.one_hot(
-            word_tensor.long(), len(self.characters) + 1
-        )
-        word_embedding = word_embedding.swapaxes(-1, -2)
+        word_embedding = encode_words(words, self.characters, self.max_word_size, self.device)
         labels = torch.tensor(
             [self.labels.index(label) for word, label in sentence],
             device=self.device,
