@@ -246,7 +246,7 @@ def calculate_accuracy_on_dev(dev_data, model):
 
 
 def task_1():
-    files = [("pos/train", "pos/dev", "pos/test"), ("ner/train", "ner/dev", "ner/test")]
+    files = [("ner/train", "ner/dev", "ner/test"), ("pos/train", "pos/dev", "pos/test")]
     now = datetime.now()
     hidden_dim = 40
     lr = 0.001
@@ -271,10 +271,18 @@ def print_test_file(sentences, res_arr, labels, file_name):
     with open(file_name, 'w') as file:
         for sentence in sentences:
             for word in sentence:
-                file.write(f"{labels[res_arr[tag_index]]}\n")
+                file.write(f"{word}\t{labels[res_arr[tag_index]]}\n")
                 tag_index += 1
             file.write("\n")
     print(tag_index)
+
+
+def add_words_to_printed_test_file(sentences, tags_arr, file_name):
+    with open(file_name, 'w') as file:
+        for sentence, sentence_tags in zip(sentences, tags_arr):
+            for word, tag in zip(sentence, sentence_tags):
+                file.write(f"{word}\t{tag}\n")
+            file.write("\n")
 
 
 def run_train_and_eval(dev_labeled_sentences, epochs, lr, print_file, test_unlabeled_sentences, train_labeled_sentences,
