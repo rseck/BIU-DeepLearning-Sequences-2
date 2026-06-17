@@ -1,0 +1,11 @@
+
+# --- added during backup ---
+.DS_Store
+.idea/
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+.env_old
+.env.*
+~$*
